@@ -2,6 +2,11 @@ const { app, BrowserWindow, ipcMain, shell, session } = require('electron');
 const path = require('path');
 const { RidoMovie, MoviesFree } = require('./scrapers');
 
+// Configure isolated userData directory and prevent Windows Chromium disk/shader cache conflicts
+app.name = 'ERU';
+app.setPath('userData', path.join(app.getPath('appData'), 'ERU_Cinema'));
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+
 let mainWindow = null;
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -51,6 +56,11 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  }, 1200);
 
   // Window maximized events
   mainWindow.on('maximize', () => {
