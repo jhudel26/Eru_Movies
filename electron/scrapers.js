@@ -14,6 +14,36 @@ async function fetchUrl(url, customHeaders = {}) {
   return await res.text();
 }
 
+// Thorough text sanitizer to strip any raw HTML tags, entities and trailing years
+function sanitizeText(str) {
+  if (!str) return '';
+  return str
+    .replace(/<[^>]+>/g, '') // Strip all HTML tags like <a ...>...</a>
+    .replace(/&amp;/g, '&')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Clean title from "Watch X Full HD (2026)" strings
+function cleanTitle(rawTitle, fallbackSlug = '') {
+  if (!rawTitle) return fallbackSlug.replace(/-/g, ' ');
+  let cleaned = sanitizeText(rawTitle);
+  cleaned = cleaned
+    .replace(/^Watch\s+/i, '')
+    .replace(/\s+Full\s+HD.*$/i, '')
+    .replace(/\s*&ndash;.*$/i, '')
+    .replace(/\s*-\s*MoviesTV.*$/i, '')
+    .replace(/\s*\(\d{4}\)\s*$/, '')
+    .trim();
+  return cleaned || fallbackSlug.replace(/-/g, ' ');
+}
+
 // -------------------------------------------------------------
 // RIDOMOVIE SCRAPER
 // -------------------------------------------------------------
@@ -32,7 +62,7 @@ const RidoMovie = {
         id: `rido-${item.id}`,
         sourceId: item.id,
         source: 'ridomovie',
-        title: item.title || item.original_title || 'Untitled',
+        title: cleanTitle(item.title || item.original_title, item.slug),
         type: item.type === 'tv' ? 'tv' : 'movie',
         slug: item.slug || item.slug_en,
         poster: item.poster_path 
@@ -40,7 +70,7 @@ const RidoMovie = {
           : null,
         backdrop: null,
         rating: item.vote_average ? parseFloat(item.vote_average).toFixed(1) : 'N/A',
-        year: item.release_date ? item.release_date.split('-')[0] : '',
+        year: item.release_date ? item.release_date.split('-')[0] : '2026',
         quality: item.quality || 'HD',
         tmdbId: item.tmdb_id,
         imdbId: item.imdb_id,
@@ -58,14 +88,13 @@ const RidoMovie = {
       const items = [];
       const seenSlugs = new Set();
 
-      // Extract cards from HTML
       const cardRegex = /<a[^>]+href="(\/(?:movie|tv)\/([^"]+))"[^>]*>[\s\S]*?<img[^>]+(?:data-src|src)="([^"]+)"[^>]*alt="([^"]*)"[\s\S]*?<\/a>/g;
       let match;
       while ((match = cardRegex.exec(html)) !== null) {
         const fullPath = match[1];
         const slug = match[2];
         const img = match[3];
-        const title = match[4];
+        const rawTitle = match[4];
 
         if (seenSlugs.has(slug)) continue;
         seenSlugs.add(slug);
@@ -76,7 +105,7 @@ const RidoMovie = {
         items.push({
           id: `rido-${slug}`,
           source: 'ridomovie',
-          title: title.trim() || slug.replace(/-/g, ' '),
+          title: cleanTitle(rawTitle, slug),
           type: isTv ? 'tv' : 'movie',
           slug: slug,
           poster: posterUrl,
@@ -87,9 +116,8 @@ const RidoMovie = {
         });
       }
 
-      // If home-rd1 returned limited items, search popular titles as fallback
       if (items.length < 10) {
-        const fallback = await this.search('action');
+        const fallback = await this.search('spider');
         return fallback;
       }
 
@@ -105,25 +133,34 @@ const RidoMovie = {
       const pageUrl = `${this.baseUrl}/${type}/${slug}`;
       const html = await fetchUrl(pageUrl, { 'Referer': `${this.baseUrl}/rd1` });
 
-      // Title
-      const titleMatch = html.match(/<h1[^>]*>(.*?)<\/h1>/i) || html.match(/<title>(.*?)<\/title>/i);
-      const title = titleMatch ? titleMatch[1].replace(/Watch /i, '').replace(/ Full HD.*$/i, '').trim() : slug;
+      // Title & Year cleanly parsed (removes any <a ...> tags!)
+      const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || html.match(/<title>(.*?)<\/title>/i);
+      let title = slug.replace(/-/g, ' ');
+      let year = slug.match(/\b(20\d\d|19\d\d)\b/)?.[1] || '2026';
+
+      if (titleMatch) {
+        const raw = titleMatch[1];
+        const yearMatch = raw.match(/\b(20\d\d|19\d\d)\b/);
+        if (yearMatch) {
+          year = yearMatch[1];
+        }
+        title = cleanTitle(raw, slug);
+      }
 
       // Synopsis / Overview
       const descMatch = html.match(/<p class="description[^"]*">([\s\S]*?)<\/p>/i) 
         || html.match(/"description":\s*"([^"]+)"/i)
         || html.match(/<div class="movie-desc[^"]*">([\s\S]*?)<\/div>/i);
-      const overview = descMatch ? descMatch[1].replace(/<[^>]+>/g, '').trim() : 'No overview available.';
+      const overview = descMatch ? sanitizeText(descMatch[1]) : 'Experience the cinema thrill in pure high-definition streaming.';
 
       // Backdrop / Poster
       const backdropMatch = html.match(/<meta property="og:image" content="([^"]+)"/i)
         || html.match(/class="[^"]*backdrop[^"]*"[^>]+src="([^"]+)"/i);
       const backdrop = backdropMatch ? (backdropMatch[1].startsWith('http') ? backdropMatch[1] : `${this.baseUrl}${backdropMatch[1]}`) : null;
 
-      // Rating & Year
+      // Rating
       const ratingMatch = html.match(/<span[^>]*class="rating-value"[^>]*>([\d\.]+)<\/span>/i) || html.match(/(\d\.\d)\s*\/\s*10/);
-      const rating = ratingMatch ? ratingMatch[1] : '7.8';
-      const year = slug.match(/\b(20\d\d|19\d\d)\b/)?.[1] || '2026';
+      const rating = ratingMatch ? ratingMatch[1] : '8.0';
 
       // Genres
       const genreMatches = [...html.matchAll(/href="\/genre\/([^\/"]+)\/[^"]*"/g)].map(m => m[1]);
@@ -151,17 +188,24 @@ const RidoMovie = {
       }
 
       // Generate multi-server stream options
+      const idParam = imdbId || tmdbId || slug;
       const servers = [];
-      if (embedUrl) {
-        servers.push({ name: 'Closeload HD (Native)', url: embedUrl, isDirect: true });
-      }
-      if (imdbId || tmdbId) {
-        const idParam = imdbId || tmdbId;
-        if (type === 'movie') {
-          servers.push({ name: 'Cinezo Server', url: `https://player.cinezo.live/embed/movie/${idParam}` });
-          servers.push({ name: 'VidSrc Alpha', url: `https://vidsrc.xyz/embed/movie?imdb=${idParam}` });
-          servers.push({ name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&imdb=1` });
-          servers.push({ name: 'VidPlay Pro', url: `https://vidsrc.cc/v2/embed/movie/${idParam}` });
+      
+      if (type === 'movie') {
+        servers.push({ name: 'Cinezo HD (Fast)', url: `https://player.cinezo.live/embed/movie/${idParam}` });
+        servers.push({ name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&tmdb=1` });
+        servers.push({ name: 'VidSrc Alpha', url: `https://vidsrc.xyz/embed/movie?imdb=${idParam}` });
+        servers.push({ name: 'VidPlay Pro', url: `https://vidsrc.cc/v2/embed/movie/${idParam}` });
+        if (embedUrl) {
+          servers.push({ name: 'Closeload Native', url: embedUrl, isDirect: true });
+        }
+      } else {
+        servers.push({ name: 'Cinezo HD (Fast)', url: `https://player.cinezo.live/embed/tv/${idParam}/1/1` });
+        servers.push({ name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&s=1&e=1&tmdb=1` });
+        servers.push({ name: 'VidSrc Alpha', url: `https://vidsrc.xyz/embed/tv?imdb=${idParam}&season=1&episode=1` });
+        servers.push({ name: 'VidPlay Pro', url: `https://vidsrc.cc/v2/embed/tv/${idParam}/1/1` });
+        if (embedUrl) {
+          servers.push({ name: 'Closeload Native', url: embedUrl, isDirect: true });
         }
       }
 
@@ -176,10 +220,10 @@ const RidoMovie = {
         poster: backdrop,
         rating,
         year,
-        genres: genres.length > 0 ? genres : ['Cinema', 'Drama'],
+        genres: genres.length > 0 ? genres : ['Cinema', 'Action', 'Drama'],
         imdbId,
         tmdbId,
-        embedUrl: servers[0]?.url || null,
+        embedUrl: servers[0]?.url || embedUrl,
         servers,
         seasons
       };
@@ -203,24 +247,22 @@ const RidoMovie = {
       const episodesHtml = parsed.episodesHtml || '';
 
       const episodes = [];
-      // Parse episodes cards
       const epRegex = /<a[^>]+href="(\/tv\/[^\/"]+\/season-\d+\/episode-(\d+))"[^>]*>[\s\S]*?<img[^>]+(?:data-src|src)="([^"]*)"[^>]*>[\s\S]*?<span class="ep-num">([^<]*)<\/span>[\s\S]*?<h[34][^>]*>([^<]*)<\/h[34]>/g;
       let m;
       while ((m = epRegex.exec(episodesHtml)) !== null) {
         const epPath = m[1];
         const epNum = parseInt(m[2], 10);
         const epImg = m[3];
-        const epTitle = m[5].trim();
+        const rawTitle = m[5];
 
         episodes.push({
           number: epNum,
-          title: epTitle || `Episode ${epNum}`,
+          title: cleanTitle(rawTitle, `Episode ${epNum}`),
           thumbnail: epImg ? (epImg.startsWith('http') ? epImg : `${this.baseUrl}${epImg}`) : null,
           urlPath: epPath
         });
       }
 
-      // Fallback: If regex didn't catch all, create sequence
       if (episodes.length === 0) {
         for (let i = 1; i <= 10; i++) {
           episodes.push({
@@ -235,7 +277,6 @@ const RidoMovie = {
       return episodes;
     } catch (err) {
       console.error('RidoTv getEpisodes error:', err);
-      // Fallback 10 episodes
       return Array.from({ length: 12 }, (_, i) => ({
         number: i + 1,
         title: `Episode ${i + 1}`,
@@ -247,36 +288,40 @@ const RidoMovie = {
 
   async getEpisodeEmbed(slug, seasonNum, episodeNum, tmdbId, imdbId) {
     try {
-      const url = `${this.baseUrl}/tv/${slug}/season-${seasonNum}/episode-${episodeNum}`;
-      const jsonStr = await fetchUrl(url, {
-        'Referer': `${this.baseUrl}/tv/${slug}`,
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json'
-      });
+      let directEmbed = null;
+      try {
+        const url = `${this.baseUrl}/tv/${slug}/season-${seasonNum}/episode-${episodeNum}`;
+        const jsonStr = await fetchUrl(url, {
+          'Referer': `${this.baseUrl}/tv/${slug}`,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
+        });
 
-      const parsed = JSON.parse(jsonStr);
-      const playerHtml = parsed.playerHtml || '';
+        const parsed = JSON.parse(jsonStr);
+        const playerHtml = parsed.playerHtml || '';
 
-      const embedMatch = playerHtml.match(/data-embed="&lt;iframe[^>]+src=&quot;([^&]+)&quot;/i)
-        || playerHtml.match(/src="([^"]*(?:embed|closeload|stream)[^"]*)"/i);
-      
-      let directEmbed = embedMatch ? embedMatch[1].replace(/&amp;/g, '&') : null;
+        const embedMatch = playerHtml.match(/data-embed="&lt;iframe[^>]+src=&quot;([^&]+)&quot;/i)
+          || playerHtml.match(/src="([^"]*(?:embed|closeload|stream)[^"]*)"/i);
+        
+        if (embedMatch) {
+          directEmbed = embedMatch[1].replace(/&amp;/g, '&');
+        }
+      } catch (e) {}
 
-      const servers = [];
+      const idParam = tmdbId || imdbId || slug;
+      const servers = [
+        { name: 'Cinezo HD (Fast)', url: `https://player.cinezo.live/embed/tv/${idParam}/${seasonNum}/${episodeNum}` },
+        { name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&s=${seasonNum}&e=${episodeNum}&tmdb=1` },
+        { name: 'VidSrc Alpha', url: `https://vidsrc.xyz/embed/tv?${imdbId ? `imdb=${imdbId}` : `tmdb=${idParam}`}&season=${seasonNum}&episode=${episodeNum}` },
+        { name: 'VidPlay Pro', url: `https://vidsrc.cc/v2/embed/tv/${idParam}/${seasonNum}/${episodeNum}` }
+      ];
+
       if (directEmbed) {
-        servers.push({ name: 'Closeload HD (Native)', url: directEmbed, isDirect: true });
-      }
-
-      const idParam = tmdbId || imdbId;
-      if (idParam) {
-        servers.push({ name: 'Cinezo Server', url: `https://player.cinezo.live/embed/tv/${idParam}/${seasonNum}/${episodeNum}` });
-        servers.push({ name: 'VidSrc Alpha', url: `https://vidsrc.xyz/embed/tv?imdb=${idParam}&season=${seasonNum}&episode=${episodeNum}` });
-        servers.push({ name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&s=${seasonNum}&e=${episodeNum}` });
-        servers.push({ name: 'VidPlay Pro', url: `https://vidsrc.cc/v2/embed/tv/${idParam}/${seasonNum}/${episodeNum}` });
+        servers.push({ name: 'Closeload Native', url: directEmbed, isDirect: true });
       }
 
       return {
-        embedUrl: servers[0]?.url || directEmbed,
+        embedUrl: servers[0].url,
         servers
       };
     } catch (err) {
@@ -285,8 +330,8 @@ const RidoMovie = {
       return {
         embedUrl: `https://player.cinezo.live/embed/tv/${idParam}/${seasonNum}/${episodeNum}`,
         servers: [
-          { name: 'Cinezo Server', url: `https://player.cinezo.live/embed/tv/${idParam}/${seasonNum}/${episodeNum}` },
-          { name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&s=${seasonNum}&e=${episodeNum}` },
+          { name: 'Cinezo HD (Fast)', url: `https://player.cinezo.live/embed/tv/${idParam}/${seasonNum}/${episodeNum}` },
+          { name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&s=${seasonNum}&e=${episodeNum}&tmdb=1` },
           { name: 'VidSrc Alpha', url: `https://vidsrc.xyz/embed/tv?imdb=${idParam}&season=${seasonNum}&episode=${episodeNum}` }
         ]
       };
@@ -314,11 +359,11 @@ const MoviesFree = {
         heroItems.push({
           id: `mf-${slug}`,
           source: 'moviesfree',
-          title: match[1].trim(),
+          title: cleanTitle(match[1], slug),
           quality: match[2].trim() || 'HD',
           rating: match[4].trim() || '8.0',
           year: match[5].trim() || '2026',
-          overview: match[6].trim().replace(/&mdash;/g, '—'),
+          overview: sanitizeText(match[6]),
           slug: slug,
           type: 'movie',
           isHero: true
@@ -333,7 +378,7 @@ const MoviesFree = {
       while ((match = cardRegex.exec(html)) !== null) {
         const slug = match[1];
         const poster = match[2].startsWith('//') ? `https:${match[2]}` : match[2];
-        const title = match[3] || slug.replace(/-/g, ' ');
+        const rawTitle = match[3];
 
         if (seen.has(slug) || slug === 'home' || slug === 'pierre') continue;
         seen.add(slug);
@@ -342,10 +387,10 @@ const MoviesFree = {
           id: `mf-${slug}`,
           source: 'moviesfree',
           slug: slug,
-          title: title,
+          title: cleanTitle(rawTitle, slug),
           poster: poster,
           backdrop: poster,
-          rating: '7.9',
+          rating: '8.0',
           year: slug.match(/\b(20\d\d|19\d\d)\b/)?.[1] || '2026',
           quality: 'HD',
           type: slug.includes('season') || slug.includes('series') ? 'tv' : 'movie'
@@ -375,7 +420,7 @@ const MoviesFree = {
       while ((match = itemRegex.exec(html)) !== null) {
         const slug = match[1];
         const poster = match[2].startsWith('//') ? `https:${match[2]}` : match[2];
-        const title = match[3] || slug.replace(/-/g, ' ');
+        const rawTitle = match[3];
 
         if (seen.has(slug) || slug === 'home') continue;
         seen.add(slug);
@@ -384,7 +429,7 @@ const MoviesFree = {
           id: `mf-${slug}`,
           source: 'moviesfree',
           slug: slug,
-          title: title,
+          title: cleanTitle(rawTitle, slug),
           poster: poster,
           backdrop: poster,
           rating: '7.8',
@@ -408,7 +453,7 @@ const MoviesFree = {
 
       // Extract title
       const titleMatch = html.match(/<title>(.*?)<\/title>/i);
-      const title = titleMatch ? titleMatch[1].replace(/&ndash; MoviesTV/i, '').replace(/MoviesTV/i, '').trim() : slug;
+      const title = cleanTitle(titleMatch ? titleMatch[1] : slug, slug);
 
       // Extract Episodes or Movie script metadata
       const b64Matches = [...html.matchAll(/data:text\/javascript;base64,([A-Za-z0-9+/=]+)/g)];
@@ -427,9 +472,8 @@ const MoviesFree = {
       // Overview
       const descMatch = html.match(/<div class="desc[^"]*">([\s\S]*?)<\/div>/i)
         || html.match(/<p class="description[^"]*">([\s\S]*?)<\/p>/i);
-      const overview = descMatch ? descMatch[1].replace(/<[^>]+>/g, '').trim() : 'Streaming in high definition.';
+      const overview = descMatch ? sanitizeText(descMatch[1]) : 'Streaming in high definition.';
 
-      // Poster / Backdrop
       let poster = epData?.tvposter ? (epData.tvposter.startsWith('//') ? `https:${epData.tvposter}` : epData.tvposter) : null;
       let backdrop = epData?.base_backdrop ? (epData.base_backdrop.startsWith('//') ? `https:${epData.base_backdrop}` : epData.base_backdrop) : null;
 
@@ -445,17 +489,16 @@ const MoviesFree = {
       const year = slug.match(/\b(20\d\d|19\d\d)\b/)?.[1] || '2026';
       const isTv = !!(epData?.tvseason || html.includes('data-load-season'));
 
-      // Generate servers
-      const servers = [];
       const idParam = tmdbId || imdbId || '12345';
+      const servers = [];
 
       if (isTv) {
-        servers.push({ name: 'Cinezo Server (Fast)', url: `https://player.cinezo.live/embed/tv/${idParam}/1/1` });
+        servers.push({ name: 'Cinezo HD (Fast)', url: `https://player.cinezo.live/embed/tv/${idParam}/1/1` });
         servers.push({ name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&s=1&e=1&tmdb=1` });
         servers.push({ name: 'VidSrc Alpha', url: `https://vidsrc.xyz/embed/tv?tmdb=${idParam}&season=1&episode=1` });
         servers.push({ name: 'VidPlay Pro', url: `https://vidsrc.cc/v2/embed/tv/${idParam}/1/1` });
       } else {
-        servers.push({ name: 'Cinezo HD', url: `https://player.cinezo.live/embed/movie/${idParam}` });
+        servers.push({ name: 'Cinezo HD (Fast)', url: `https://player.cinezo.live/embed/movie/${idParam}` });
         servers.push({ name: 'SuperEmbed 4K', url: `https://multiembed.mov/?video_id=${idParam}&tmdb=1` });
         servers.push({ name: 'VidSrc Alpha', url: `https://vidsrc.xyz/embed/movie?tmdb=${idParam}` });
         servers.push({ name: 'VidPlay Pro', url: `https://vidsrc.cc/v2/embed/movie/${idParam}` });

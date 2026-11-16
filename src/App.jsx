@@ -116,15 +116,17 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-eru-bg text-slate-100 overflow-hidden">
-      {/* Frameless Custom Window Titlebar */}
-      <TitleBar
-        source={source}
-        onSourceChange={handleSourceChange}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        onSearchSubmit={handleSearch}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-      />
+      {/* Frameless Custom Window Titlebar (Hidden in dedicated player mode) */}
+      {!playingMedia && (
+        <TitleBar
+          source={source}
+          onSourceChange={handleSourceChange}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          onSearchSubmit={handleSearch}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
