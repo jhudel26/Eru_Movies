@@ -1,0 +1,63 @@
+{
+  "name": "eru-desktop",
+  "version": "1.0.0",
+  "description": "ERU - Cinema Movies & TV Shows Desktop Streaming Platform",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev:vite": "vite",
+    "dev:electron": "wait-on tcp:5173 && cross-env NODE_ENV=development electron .",
+    "dev": "concurrently -k -n \"VITE,ELECTRON\" -c \"cyan,teal\" \"npm run dev:vite\" \"npm run dev:electron\"",
+    "build": "vite build",
+    "start": "electron .",
+    "package": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "com.eru.desktop",
+    "productName": "ERU",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.png"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*",
+      "package.json"
+    ]
+  },
+  "keywords": [
+    "movies",
+    "tv-shows",
+    "streaming",
+    "cinema",
+    "desktop",
+    "electron",
+    "react"
+  ],
+  "author": "jhudel26",
+  "license": "MIT",
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.73.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@tailwindcss/vite": "^4.3.5",
+    "@vitejs/plugin-react": "^5.1.4",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.7.0",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.17",
+    "vite": "^8.0.3",
+    "wait-on": "^9.0.4"
+  }
+}

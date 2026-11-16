@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #081114;
+  color: #e2f1f1;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+/* Custom scrollbars with teal touch */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #091316;
+}
+::-webkit-scrollbar-thumb {
+  background: #153238;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00e5bc;
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(14, 28, 32, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(20, 184, 166, 0.15);
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(17, 34, 39, 0.8) 0%, rgba(10, 20, 23, 0.9) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 229, 188, 0.12);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(0, 229, 188, 0.5);
+  box-shadow: 0 10px 30px -10px rgba(0, 229, 188, 0.25);
+  transform: translateY(-4px);
+}
+
+.teal-gradient-text {
+  background: linear-gradient(135deg, #ffffff 0%, #00e5bc 60%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.shadow-teal-glow {
+  box-shadow: 0 0 20px rgba(0, 229, 188, 0.25);
+}
+
+.shadow-teal-glow-lg {
+  box-shadow: 0 0 35px rgba(0, 229, 188, 0.4);
+}
+
+/* Custom frameless window dragging */
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
