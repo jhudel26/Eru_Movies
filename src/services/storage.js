@@ -42,6 +42,7 @@ export const StorageService = {
   },
 
   addToHistory(mediaItem, extra = {}) {
+    if (!mediaItem || !mediaItem.id) return this.getHistory();
     const history = this.getHistory();
     const filtered = history.filter(i => i.id !== mediaItem.id);
     const updated = [
@@ -51,13 +52,21 @@ export const StorageService = {
         watchedAt: Date.now()
       },
       ...filtered
-    ].slice(0, 50); // Keep last 50 items
+    ].slice(0, 60); // Keep last 60 items
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+    return updated;
+  },
+
+  removeFromHistory(id) {
+    const history = this.getHistory();
+    const updated = history.filter(i => i.id !== id);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
     return updated;
   },
 
   clearHistory() {
     localStorage.removeItem(HISTORY_KEY);
+    return [];
   },
 
   // Settings
@@ -65,17 +74,19 @@ export const StorageService = {
     try {
       const data = localStorage.getItem(SETTINGS_KEY);
       return data ? JSON.parse(data) : {
-        defaultSource: 'ridomovie', // 'ridomovie' | 'moviesfree'
+        defaultSource: 'vidy',
         autoplayNext: true,
         cinemaMode: true,
         accentColor: 'teal',
+        hideUnavailable: true,
       };
     } catch {
       return {
-        defaultSource: 'ridomovie',
+        defaultSource: 'vidy',
         autoplayNext: true,
         cinemaMode: true,
         accentColor: 'teal',
+        hideUnavailable: true,
       };
     }
   },

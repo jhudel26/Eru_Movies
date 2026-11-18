@@ -12,13 +12,15 @@ contextBridge.exposeInMainWorld('eruAPI', {
     return () => ipcRenderer.removeListener('window:maximize-change', listener);
   },
 
-  // Sources Scraper APIs
-  getHome: (source) => ipcRenderer.invoke('sources:getHome', source),
-  search: (source, query) => ipcRenderer.invoke('sources:search', { source, query }),
-  getDetail: (source, type, slug) => ipcRenderer.invoke('sources:getDetail', { source, type, slug }),
-  getEpisodes: (source, slug, seasonNum) => ipcRenderer.invoke('sources:getEpisodes', { source, slug, seasonNum }),
-  getEpisodeEmbed: (source, slug, seasonNum, episodeNum, tmdbId, imdbId) => 
-    ipcRenderer.invoke('sources:getEpisodeEmbed', { source, slug, seasonNum, episodeNum, tmdbId, imdbId }),
+  // Unified Multi-Source Catalog APIs
+  getHome: () => ipcRenderer.invoke('sources:getHome'),
+  getMovies: () => ipcRenderer.invoke('sources:getMovies'),
+  getTvShows: () => ipcRenderer.invoke('sources:getTvShows'),
+  search: (query) => ipcRenderer.invoke('sources:search', { query }),
+  getDetail: (type, slug, source, cardTitle) => ipcRenderer.invoke('sources:getDetail', { type, slug, source, cardTitle }),
+  getEpisodes: (slug, seasonNum, source) => ipcRenderer.invoke('sources:getEpisodes', { slug, seasonNum, source }),
+  getEpisodeEmbed: (slug, seasonNum, episodeNum, tmdbId, imdbId, source) => 
+    ipcRenderer.invoke('sources:getEpisodeEmbed', { slug, seasonNum, episodeNum, tmdbId, imdbId, source }),
 
   // Open external links safely
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url)

@@ -1,98 +1,77 @@
 import React from 'react';
-import { 
-  Compass, 
-  Film, 
-  Tv, 
-  Bookmark, 
-  History, 
-  Settings, 
-  Sparkles,
-  ExternalLink
+import {
+  Compass,
+  Film,
+  Tv,
+  Bookmark,
+  History,
+  Settings,
+  BookmarkCheck,
+  Clock
 } from 'lucide-react';
 
-export default function Sidebar({ 
-  currentTab, 
-  onTabChange, 
+export default function Sidebar({
+  currentTab,
+  onTabChange,
   watchlistCount = 0,
-  onOpenSettings,
-  source
+  onOpenSettings
 }) {
   const navItems = [
-    { id: 'discover', label: 'Discover', icon: Compass },
-    { id: 'movies', label: 'Movies', icon: Film },
-    { id: 'tv', label: 'TV Shows', icon: Tv },
-    { id: 'watchlist', label: 'Watchlist', icon: Bookmark, badge: watchlistCount },
-    { id: 'history', label: 'History', icon: History },
+    { id: 'discover',  label: 'Discover',   icon: Compass,   iconActive: Compass },
+    { id: 'movies',    label: 'Movies',      icon: Film,      iconActive: Film },
+    { id: 'tv',        label: 'TV Shows',    icon: Tv,        iconActive: Tv },
+    { id: 'watchlist', label: 'Watchlist',   icon: Bookmark,  iconActive: BookmarkCheck, badge: watchlistCount },
+    { id: 'history',   label: 'History',     icon: History,   iconActive: Clock },
   ];
 
   return (
-    <aside className="w-56 bg-eru-darkest/90 border-r border-eru-teal/15 flex flex-col justify-between p-3 select-none">
-      <div className="space-y-6">
-        {/* Navigation list */}
-        <div className="space-y-1">
-          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-eru-muted mb-2">
-            Menu
-          </p>
+    <aside className="w-56 bg-eru-bg-deep flex flex-col justify-between py-4 select-none shrink-0 border-r border-eru-border-subtle/50">
+      <div>
+        {/* Navigation Items — starts clean at top */}
+        <nav className="space-y-1 px-3 pt-1">
           {navItems.map((item) => {
-            const Icon = item.icon;
             const isActive = currentTab === item.id;
+            const Icon = isActive ? item.iconActive : item.icon;
             return (
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 group relative ${
                   isActive
-                    ? 'bg-eru-teal/15 text-eru-teal border border-eru-teal/30 shadow-teal-glow'
-                    : 'text-slate-400 hover:text-slate-100 hover:bg-eru-card/60'
+                    ? 'bg-eru-teal/15 text-eru-teal border border-eru-teal/30 shadow-teal-glow-sm font-bold'
+                    : 'text-eru-text-muted hover:text-eru-text-primary hover:bg-eru-surface-1 border border-transparent'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-eru-teal' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Icon className={`w-4.5 h-4.5 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                    isActive ? 'text-eru-teal' : 'text-eru-text-muted group-hover:text-eru-teal'
+                  }`} />
+                  <span className="truncate">{item.label}</span>
                 </div>
                 {item.badge > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-eru-teal/20 text-eru-teal font-bold border border-eru-teal/30">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-eru-teal text-slate-950 font-extrabold leading-none shadow-teal-glow-sm">
                     {item.badge}
                   </span>
                 )}
               </button>
             );
           })}
-        </div>
-
-        {/* Source Status Card */}
-        <div className="p-3 rounded-xl bg-eru-card/50 border border-eru-teal/15 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-eru-teal opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-eru-teal"></span>
-            </span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
-              Active Source
-            </span>
-          </div>
-          <p className="text-xs font-semibold text-eru-teal capitalize">
-            {source === 'ridomovie' ? 'RidoMovie (Fast HD)' : 'MoviesFree (Cinezo)'}
-          </p>
-          <p className="text-[10px] text-slate-400">
-            {source === 'ridomovie' ? 'ridomovie.to/rd1' : 'moviesfree.cv/home'}
-          </p>
-        </div>
+        </nav>
       </div>
 
-      {/* Bottom Settings Button */}
-      <div className="pt-3 border-t border-slate-800/80 space-y-1">
+      {/* Bottom — Settings & version */}
+      <div className="px-2.5 space-y-2">
+        <div className="border-t border-eru-border-subtle/80 mb-2" />
         <button
           onClick={onOpenSettings}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-100 hover:bg-eru-card/60 transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 text-eru-text-muted hover:text-eru-text-primary hover:bg-eru-surface-1 group border border-transparent"
         >
-          <Settings className="w-4 h-4" />
+          <Settings className="w-4.5 h-4.5 text-eru-text-muted group-hover:text-eru-teal transition-transform group-hover:rotate-45 duration-300" />
           <span>Settings</span>
         </button>
-
-        <div className="px-3 py-1 flex items-center justify-between text-[10px] text-slate-500">
-          <span>ERU Desktop v1.0</span>
-          <span className="text-eru-teal/80 font-mono">Teal Edition</span>
+        <div className="px-3 pt-1 flex items-center justify-between text-[10px] text-eru-text-disabled font-mono">
+          <span>ERU v1.0.0</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-eru-teal shadow-teal-glow-sm animate-pulse-teal" />
         </div>
       </div>
     </aside>

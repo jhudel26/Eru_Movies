@@ -9,7 +9,8 @@
     "dev": "concurrently -k -n \"VITE,ELECTRON\" -c \"cyan,teal\" \"npm run dev:vite\" \"npm run dev:electron\"",
     "build": "vite build",
     "start": "electron .",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build && electron-builder",
+    "installer": "npm run build && npx electron-builder --dir && \"C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe\" installer.iss"
   },
   "build": {
     "appId": "com.eru.desktop",
@@ -40,15 +41,11 @@
   "author": "jhudel26",
   "license": "MIT",
   "dependencies": {
-    "clsx": "^2.1.1",
     "lucide-react": "^1.73.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "tailwind-merge": "^3.7.0"
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.5",
-    "@tailwindcss/vite": "^4.3.5",
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.19",
     "concurrently": "^9.2.1",

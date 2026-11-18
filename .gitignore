@@ -6,3 +6,7 @@ release/
 *.log
 .env
 .env.local
+nul
+ERUMI_ANALYSIS.md
+*.tmp
+
