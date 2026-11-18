@@ -1,36 +1,70 @@
-# ERU Cinema
+<div align="center">
 
-Desktop streaming application for movies and television series, built with Electron, React, and Tailwind CSS.
+<img src="public/icon.png" alt="ERU Cinema Logo" width="140" />
 
+# E R U &nbsp; C I N E M A &nbsp; · &nbsp; エ ル ミ
+
+**Cinema-Grade Desktop Streaming Platform for Movies & TV Shows**
+
+[![Electron](https://img.shields.io/badge/Electron-45.3.3-47848F?logo=electron&logoColor=white)](https://electronjs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Windows](https://img.shields.io/badge/Platform-Windows%20Desktop-0078D6?logo=windows&logoColor=white)](https://microsoft.com/windows)
+[![License](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
+
+---
+
+*Inspired by [Erumi Android App](https://github.com/jhudel26/Erumi-Android-App) · Reimagined for Desktop Cinema Experience*
+
+</div>
+
+---
+
+## Screenshots
+
+<div align="center">
+
+### Main Interface & Cinema Catalog
 ![ERU Cinema Interface](docs/screenshots/preview.png)
+
+</div>
 
 ---
 
 ## Overview
 
-ERU Cinema is a dedicated desktop media browser and player for Windows. It provides a unified interface for browsing trending, popular, and top-rated movies and TV shows, complete with rich metadata, seasonal episode navigation, multi-source stream resolution, and integrated ad-blocking.
+**ERU Cinema** is a cinema-grade standalone desktop application engineered specifically for streaming **Movies** and **TV Shows** with a modern high-contrast **Teal** aesthetic (`#00e5bc`), glassmorphic panels, and smooth animations.
+
+Unlike anime-specific applications, **ERU** focuses on western and international cinema, blockbuster movies, trending series, and episodic television shows powered by dynamic discovery and multi-server streaming backends.
 
 ---
 
-## Key Features
+## Features
 
-- **Curated Catalog & Digital Availability Filtering**: 
-  - Dynamic discovery powered by TMDB integration.
-  - Automatic filtering excludes theatrical-only movies and unaired television shows to present only titles with digital streaming availability.
-- **Dedicated Player HUD**:
-  - Full-screen cinema player with custom HUD controls.
-  - Multi-server fallback switching directly inside the player interface.
-  - Embedded Season & Episode navigation drawer for episodic TV series.
-  - Keyboard shortcuts (`Esc` for fullscreen/exit handling, `R` for stream reload).
-- **Ad and Popup Interception**:
-  - Process-level webRequest interception blocking tracking networks, third-party redirects, and invasive ad scripts.
-  - Seamless embed playback with automatic header policy adaptation.
-- **Local Persistence**:
-  - Offline watchlist bookmarks and persistent watch history.
-  - Configurable user settings (autoplay preferences, stream filtering, data reset).
-- **Windows Integration**:
-  - Frameless modern window design with responsive window controls.
-  - Custom Inno Setup installer script with Start Menu and Desktop shortcuts.
+- **Teal Cinema UI/UX**:
+  - Deep noir background (`#081114`) with glowing teal neon accents (`#00e5bc`, `#14f4c9`).
+  - Glassmorphic translucent cards, ambient backdrop lighting, and smooth hover micro-interactions.
+  - Custom frameless title bar with integrated search and native window controls.
+
+- **Digital Availability Filtering**:
+  - Automatically filters out movies that are only in movie theaters or have no digital/physical release yet.
+  - Excludes unreleased TV shows and unaired seasons, ensuring titles in the catalog are streamable.
+  - Real-time catalog powered by TMDB integration with local caching.
+
+- **Cinema Player Experience**:
+  - Full-screen and theater mode player with frameless HUD controls.
+  - Redundant multi-server fallback switcher directly inside the player bar.
+  - Integrated Season & Episode Drawer for TV Series (switch episodes without leaving the video player).
+  - Next / Previous episode shortcuts and instant stream reload (`R` key).
+
+- **Ad-Block & Security Layer**:
+  - Process-level webRequest interception blocking invasive ad networks, popunders, and redirect scripts.
+  - Automatic `X-Frame-Options` and `Content-Security-Policy` header rewriting for seamless embed playback.
+
+- **Watchlist & History**:
+  - Local persistent **Watchlist** to bookmark movies and series.
+  - Continuous **Watch History** tracking recently played media and episode numbers.
 
 ---
 
@@ -38,75 +72,60 @@ ERU Cinema is a dedicated desktop media browser and player for Windows. It provi
 
 | Layer | Technology |
 |---|---|
-| Runtime | Electron 45 (Chromium + Node.js) |
-| UI Framework | React 19 |
-| Styling | Tailwind CSS 3.4 |
-| Bundler | Vite 8 |
-| Icons | Lucide React |
-| Installer | Inno Setup 6 |
+| **Runtime** | Electron 45 (Chromium + Node.js) |
+| **UI Framework** | React 19 |
+| **Styling** | Tailwind CSS 3.4 |
+| **Bundler** | Vite 8 |
+| **Icons** | Lucide React |
+| **Installer** | Inno Setup 6 |
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-
-- Node.js 18.0 or higher
-- npm 9.0 or higher
+- Node.js 18+ (tested on Node v24/v26)
+- npm 9+
 - Windows 10 / 11 (64-bit)
 
 ### Installation
-
-Clone the repository and install dependencies:
-
 ```bash
 git clone https://github.com/jhudel26/Eru_Movies.git
 cd Eru_Movies
 npm install
 ```
 
-### Environment Configuration (Optional)
-
-The application includes a built-in fallback configuration for discovery and metadata. To use your own TMDB API key:
-
+### Optional: TMDB API Key Configuration
+The app includes a built-in fallback configuration for discovery and metadata. To use your own TMDB API key:
 1. Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
    ```
-2. Set your API key:
+2. Edit `.env`:
    ```env
    TMDB_API_KEY=your_api_key_here
    ```
 
----
-
-## Development
-
-Run the Vite development server and Electron client concurrently:
-
+### Run in Development (with Hot Reloading)
 ```bash
 npm run dev
 ```
 
-Run Vite build only:
-
+### Build Production Bundle
 ```bash
 npm run build
 ```
 
-Run Electron using the production build:
-
+### Launch Built Desktop Application
 ```bash
 npm start
 ```
 
 ---
 
-## Building the Installer
+## Building the Installer (Inno Setup)
 
-ERU Cinema uses Inno Setup 6 to compile standalone Windows setup packages.
-
-### Automated Build (Recommended)
+ERU Cinema uses **Inno Setup 6** for compiling lightweight, high-compression standalone setup packages.
 
 Ensure Inno Setup 6 is installed on your system at `C:\Program Files (x86)\Inno Setup 6\ISCC.exe`, then run:
 
@@ -114,54 +133,57 @@ Ensure Inno Setup 6 is installed on your system at `C:\Program Files (x86)\Inno 
 npm run installer
 ```
 
-This single command:
-1. Compiles the React application via Vite.
-2. Packages unpacked Electron binaries into `release/win-unpacked`.
-3. Runs the Inno Setup compiler (`ISCC.exe`) against `installer.iss`.
-4. Outputs the finished installer to `release/installer/ERU_Cinema_Setup_v1.0.0.exe`.
+This single command will:
+1. Build the production React client (`vite build`).
+2. Package the Electron executable into `release/win-unpacked`.
+3. Compile the Inno Setup script (`installer.iss`) with `lzma2/ultra64` solid compression.
+4. Output the final installer to `release/installer/ERU_Cinema_Setup_v1.0.0.exe`.
 
 ---
 
 ## Project Structure
 
 ```
-.
+Eru_Movies/
 ├── electron/
-│   ├── main.js             # Electron main process, window management, ad filtering, IPC
-│   ├── preload.js          # Secure context bridge definitions
-│   ├── scrapers.js         # Unified media catalog and scraper orchestrator
-│   ├── tmdb.js             # TMDB API client with digital availability filters and caching
-│   ├── vidy.js             # Stream resolver and embed URL generator
+│   ├── main.js             # Electron main process, window management, ad-block, IPC
+│   ├── preload.js          # ContextBridge secure APIs
+│   ├── scrapers.js         # Unified catalog orchestrator
+│   ├── tmdb.js             # TMDB API client with digital availability filtering & cache
+│   ├── vidy.js             # Multi-server embed resolver
 │   └── splash.html         # Application startup splash screen
 ├── public/
 │   ├── icon.ico            # Windows application icon
-│   └── icon.png            # High-resolution raster asset
+│   └── icon.png            # High-resolution logo
 ├── src/
+│   ├── assets/             # Brand graphics & icons
 │   ├── components/
-│   │   ├── HeroBanner.jsx        # Featured spotlight carousel
-│   │   ├── MediaCard.jsx         # Poster card with ratings and release information
-│   │   ├── MediaDetailModal.jsx  # Detailed metadata sheet and episode picker
-│   │   ├── MediaGrid.jsx         # Category filter pills and responsive media grid
+│   │   ├── TitleBar.jsx          # Custom frameless title bar with search & controls
+│   │   ├── Sidebar.jsx           # Modern navigation drawer
+│   │   ├── HeroBanner.jsx        # Cinema hero banner with auto-carousel
+│   │   ├── MediaCard.jsx         # Glassmorphic poster card with rating & badges
+│   │   ├── MediaGrid.jsx         # Category filter pills & responsive media grid
+│   │   ├── MediaDetailModal.jsx  # Rich details sheet with seasons & server list
 │   │   ├── PlayerView.jsx        # Cinema player mode with multi-server switcher
-│   │   ├── SettingsModal.jsx     # User preferences and storage manager
-│   │   ├── Sidebar.jsx           # Main navigation drawer
-│   │   └── TitleBar.jsx          # Custom frameless title bar
+│   │   └── SettingsModal.jsx     # User preferences & history manager
 │   ├── services/
-│   │   ├── api.js                # Frontend IPC communication layer
-│   │   └── storage.js            # Local storage persistence manager
-│   ├── App.jsx             # Root layout and view controller
-│   ├── index.css           # Global theme styling
-│   └── main.jsx            # React application entry
+│   │   ├── api.js                # Frontend IPC abstraction layer
+│   │   └── storage.js            # LocalStorage persistence manager
+│   ├── App.jsx             # Main application orchestrator
+│   ├── index.css           # Custom Teal theme & glassmorphic styles
+│   └── main.jsx            # React root entry
+├── docs/
+│   └── screenshots/        # Application interface previews
 ├── installer.iss           # Inno Setup 6 installation script
-├── package.json            # Scripts and project dependencies
-└── vite.config.mjs         # Vite bundler configuration
+├── vite.config.mjs         # Vite bundler configuration
+└── package.json            # Scripts & dependencies
 ```
 
 ---
 
 ## Disclaimer
 
-This project is created for educational and research purposes. ERU Cinema does not host, upload, or store media files on its servers. All catalog metadata and streaming links are retrieved dynamically from public third-party services.
+This project is created for **educational and research purposes only**. ERU Cinema does not host, store, or distribute any media files or copyright-protected content. All streams and metadata are indexed and fetched dynamically from public external providers.
 
 ---
 
