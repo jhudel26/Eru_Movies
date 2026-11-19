@@ -40,28 +40,24 @@ export default function TitleBar({
     <div className="relative h-[68px] bg-eru-bg-deep flex items-center justify-between px-6 z-50 select-none app-drag-region">
       {/* Brand — Left */}
       <div className="flex items-center gap-3.5 app-no-drag shrink-0">
-        <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-eru-surface-2 to-eru-surface-1 border border-eru-teal/35 shadow-teal-glow-sm shrink-0">
-          {!iconError ? (
-            <img
-              src="./icon.png"
-              alt="ERU"
-              className="w-7 h-7 object-contain rounded-lg"
-              onError={() => setIconError(true)}
-            />
-          ) : (
-            <div className="w-7 h-7 flex items-center justify-center">
-              <Clapperboard className="w-5 h-5 text-eru-teal" />
-            </div>
-          )}
-        </div>
+        {!iconError ? (
+          <img
+            src="./icon.png"
+            alt="ERU"
+            className="w-11 h-11 object-contain drop-shadow-[0_2px_12px_rgba(0,229,188,0.35)] shrink-0 transition-transform duration-200 hover:scale-105"
+            onError={() => setIconError(true)}
+          />
+        ) : (
+          <Clapperboard className="w-9 h-9 text-eru-teal drop-shadow-[0_2px_10px_rgba(0,229,188,0.4)] shrink-0" />
+        )}
         <div className="flex flex-col leading-none">
           <div className="flex items-center gap-2">
-            <span className="font-black text-[19px] tracking-[0.22em] teal-gradient-text leading-none">ERU</span>
-            <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-eru-teal/15 text-eru-teal font-extrabold uppercase tracking-wider border border-eru-teal/30 leading-none shadow-teal-glow-sm">
+            <span className="font-black text-[21px] tracking-[0.22em] teal-gradient-text leading-none">ERU</span>
+            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-eru-teal/15 text-eru-teal font-extrabold uppercase tracking-wider border border-eru-teal/30 leading-none shadow-teal-glow-sm">
               Cinema
             </span>
           </div>
-          <span className="text-[8.5px] text-eru-text-muted tracking-[0.18em] uppercase leading-none mt-1 font-semibold">
+          <span className="text-[9px] text-eru-text-muted tracking-[0.18em] uppercase leading-none mt-1 font-semibold">
             Entertainment Retrieval Unlimited
           </span>
         </div>

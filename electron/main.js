@@ -36,42 +36,86 @@ app.commandLine.appendSwitch('disable-features', 'Dawn,DawnGraphiteCache');
 
 let mainWindow = null;
 let splashWindow = null;
+let splashTransitionStarted = false;
 
-// ── Splash Screen ─────────────────────────────────────────────
+const APP_WIDTH = 1320;
+const APP_HEIGHT = 840;
+const MIN_WIDTH = 1040;
+const MIN_HEIGHT = 680;
+
+function getAppIcon() {
+  const icoPath = path.join(__dirname, '../public/icon.ico');
+  const pngPath = path.join(__dirname, '../public/icon.png');
+  if (process.platform === 'win32' && fs.existsSync(icoPath)) {
+    return icoPath;
+  }
+  return pngPath;
+}
+
+// ── Splash Screen (Matches Main App Size: 1320x840) ─────────────
 function createSplash() {
+  const iconPath = getAppIcon();
+
   splashWindow = new BrowserWindow({
-    width: 600,
-    height: 336,
+    width: APP_WIDTH,
+    height: APP_HEIGHT,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
     frame: false,
-    transparent: true,
+    transparent: false,
     resizable: false,
     movable: true,
     center: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    backgroundColor: '#00000000',
+    alwaysOnTop: false,
+    skipTaskbar: false,
+    backgroundColor: '#081114',
+    icon: iconPath,
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
     }
   });
 
-  // In dev the splash is next to this file; in prod it's in the app resources
+  splashWindow.once('ready-to-show', () => {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.show();
+    }
+  });
+
   const splashPath = path.join(__dirname, 'splash.html');
   splashWindow.loadFile(splashPath);
   splashWindow.on('closed', () => { splashWindow = null; });
 }
 
-function closeSplash() {
-  if (!splashWindow || splashWindow.isDestroyed()) return;
-  // Fade out via opacity before destroying
-  splashWindow.webContents.executeJavaScript(`
-    document.body.style.transition = 'opacity 0.4s ease';
-    document.body.style.opacity = '0';
-  `).catch(() => {});
-  setTimeout(() => {
-    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
-  }, 420);
+function transitionToMain() {
+  if (splashTransitionStarted) return;
+  splashTransitionStarted = true;
+
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    // Tell splash HTML to complete progress to 100% and initiate smooth fade-out
+    splashWindow.webContents.executeJavaScript(`
+      if (typeof window.onAppReady === 'function') {
+        window.onAppReady();
+      }
+    `).catch(() => {});
+
+    // After loading bar hits 100% and pauses for visual feedback (~750ms), reveal main window & close splash
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+      }
+      setTimeout(() => {
+        if (splashWindow && !splashWindow.isDestroyed()) {
+          splashWindow.close();
+        }
+      }, 400);
+    }, 750);
+  } else {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+    }
+  }
 }
 
 // Common ad/popup domain patterns to block from embed players
@@ -94,13 +138,21 @@ const AD_PATTERNS = [
 ];
 
 function createWindow() {
-  const iconPath = path.join(__dirname, '../public/icon.png');
+  const iconPath = getAppIcon();
+
+  // Inherit exact position and bounds from splashWindow to ensure seamless transition
+  let winBounds = { width: APP_WIDTH, height: APP_HEIGHT };
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    winBounds = splashWindow.getBounds();
+  }
 
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 840,
-    minWidth: 1040,
-    minHeight: 680,
+    width: winBounds.width,
+    height: winBounds.height,
+    x: winBounds.x,
+    y: winBounds.y,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#081114',
@@ -116,23 +168,17 @@ function createWindow() {
     }
   });
 
-  // Show main window after splash: wait for React app to be ready, then fade splash out
+  // Show main window after splash: wait for React app to be ready, then trigger smooth 100% completion & reveal
   mainWindow.once('ready-to-show', () => {
-    // Give React a moment to hydrate before revealing
-    setTimeout(() => {
-      closeSplash();
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
-      }, 300);
-    }, 600);
+    transitionToMain();
   });
-  // Hard safety: show main if ready-to-show never fires within 5s
+
+  // Hard safety: transition if ready-to-show never fires within 6s
   setTimeout(() => {
-    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-      closeSplash();
-      mainWindow.show();
+    if (!splashTransitionStarted) {
+      transitionToMain();
     }
-  }, 5000);
+  }, 6000);
 
   // Window maximized events with safety checks
   mainWindow.on('maximize', () => {

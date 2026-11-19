@@ -15,9 +15,11 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: transparent;
+      background: #081114;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       -webkit-app-region: drag;
       user-select: none;
+      transition: opacity 0.4s ease;
     }
 
     .splash-container {
@@ -25,16 +27,17 @@
       width: 100%;
       height: 100%;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #0B1120;
-      border-radius: 16px;
+      background: #081114;
+      border-radius: 12px;
       overflow: hidden;
-      border: 1px solid rgba(45, 212, 191, 0.25);
-      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 35px rgba(20, 184, 166, 0.2);
+      border: 1px solid rgba(0, 229, 188, 0.2);
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.95), 0 0 45px rgba(0, 229, 188, 0.15);
     }
 
-    /* Full-cover splash image */
+    /* Cinematic background cover */
     .splash-bg {
       position: absolute;
       inset: 0;
@@ -42,80 +45,162 @@
       height: 100%;
       object-fit: cover;
       object-position: center;
-      opacity: 0;
-      animation: fadeIn 0.6s ease forwards;
+      opacity: 0.35;
+      filter: saturate(1.2) brightness(0.7);
+      animation: zoomIn 10s ease-out infinite alternate;
     }
 
-    /* Vignette overlay so bottom loader is readable */
+    /* Ambient radial vignettes */
     .splash-vignette {
       position: absolute;
       inset: 0;
-      background: radial-gradient(ellipse at center, transparent 30%, rgba(11, 17, 32, 0.55) 100%);
+      background: radial-gradient(circle at center, rgba(8, 17, 20, 0.5) 0%, rgba(8, 17, 20, 0.88) 70%, #081114 100%);
       pointer-events: none;
     }
 
-    /* Bottom loading bar */
-    .loader-wrap {
-      position: absolute;
-      bottom: 36px;
-      left: 50%;
-      transform: translateX(-50%);
+    .splash-content {
+      position: relative;
+      z-index: 10;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 10px;
-      animation: fadeInUp 0.8s ease 0.3s both;
+      justify-content: center;
+      animation: contentFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
-    .loader-track {
-      width: 180px;
-      height: 2px;
-      background: rgba(255, 255, 255, 0.12);
+    /* Brand Logo */
+    .brand-logo-wrap {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .brand-glow {
+      position: absolute;
+      inset: -14px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 229, 188, 0.35) 0%, transparent 70%);
+      filter: blur(14px);
+      animation: pulseGlow 3s ease-in-out infinite;
+    }
+
+    .brand-logo {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      object-fit: contain;
+      filter: drop-shadow(0 8px 24px rgba(0, 229, 188, 0.4));
+      animation: floatLogo 4s ease-in-out infinite alternate;
+    }
+
+    /* Brand Title */
+    .brand-title {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #00e5bc 0%, #14f4c9 50%, #ffffff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+      padding-left: 0.28em; /* Offset letter-spacing centering */
+      text-shadow: 0 0 30px rgba(0, 229, 188, 0.35);
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 42px;
+      padding-left: 0.32em;
+      opacity: 0.85;
+    }
+
+    /* Progress section */
+    .progress-section {
+      width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .progress-track {
+      position: relative;
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.08);
       border-radius: 999px;
       overflow: hidden;
+      border: 1px solid rgba(0, 229, 188, 0.15);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
     }
 
-    .loader-fill {
+    .progress-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #0F766E, #2DD4BF, #99F6E4);
+      background: linear-gradient(90deg, #0f766e, #00e5bc, #80ffd6);
       border-radius: 999px;
-      animation: loadProgress 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-      box-shadow: 0 0 8px rgba(45, 212, 191, 0.7);
+      box-shadow: 0 0 16px rgba(0, 229, 188, 0.85);
+      transition: width 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
-    .loader-label {
-      font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.12em;
+      font-weight: 600;
+      color: #64748b;
+      letter-spacing: 0.08em;
+    }
+
+    .progress-label {
+      color: #94a3b8;
       text-transform: uppercase;
-      color: rgba(148, 163, 184, 0.75);
-      animation: pulse 1.6s ease-in-out infinite;
+      transition: color 0.2s ease;
     }
 
-    /* Animations */
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
+    .progress-label.ready {
+      color: #00e5bc;
+      font-weight: 700;
     }
 
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .progress-percent {
+      color: #00e5bc;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
     }
 
-    @keyframes loadProgress {
-      0%   { width: 0%; }
-      40%  { width: 55%; }
-      70%  { width: 78%; }
-      90%  { width: 92%; }
-      100% { width: 100%; }
+    /* Keyframes */
+    @keyframes contentFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 0.6; }
-      50%       { opacity: 1; }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.75; transform: scale(1.15); }
+    }
+
+    @keyframes floatLogo {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-6px); }
+    }
+
+    @keyframes zoomIn {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.05); }
+    }
+
+    .splash-fade-out {
+      opacity: 0;
     }
   </style>
 </head>
@@ -124,12 +209,105 @@
     <img class="splash-bg" src="./splash.webp" alt="" draggable="false" />
     <div class="splash-vignette"></div>
 
-    <div class="loader-wrap">
-      <div class="loader-track">
-        <div class="loader-fill"></div>
+    <div class="splash-content">
+      <div class="brand-logo-wrap">
+        <div class="brand-glow"></div>
+        <img class="brand-logo" src="./icon.png" alt="ERU Cinema" draggable="false" />
       </div>
-      <span class="loader-label">Loading…</span>
+
+      <div class="brand-title">ERU Cinema</div>
+      <div class="brand-subtitle">Entertainment Retrieval Unlimited</div>
+
+      <div class="progress-section">
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-info">
+          <span class="progress-label" id="progressLabel">Initializing engines...</span>
+          <span class="progress-percent" id="progressPercent">0%</span>
+        </div>
+      </div>
     </div>
   </div>
+
+  <script>
+    (function() {
+      const fill = document.getElementById('progressFill');
+      const label = document.getElementById('progressLabel');
+      const percent = document.getElementById('progressPercent');
+
+      let currentVal = 0;
+      let targetVal = 10;
+      let appIsReady = false;
+      let hasCompleted = false;
+
+      function render(val) {
+        const p = Math.min(100, Math.max(0, Math.round(val)));
+        fill.style.width = p + '%';
+        percent.textContent = p + '%';
+
+        if (p < 25) {
+          label.textContent = 'Initializing engines...';
+        } else if (p < 55) {
+          label.textContent = 'Connecting digital catalog...';
+        } else if (p < 85) {
+          label.textContent = 'Loading streaming resolvers...';
+        } else if (p < 100) {
+          label.textContent = 'Preparing interface...';
+        } else {
+          label.textContent = 'Ready';
+          label.classList.add('ready');
+        }
+      }
+
+      // Smooth step tick
+      const tickTimer = setInterval(() => {
+        if (!appIsReady) {
+          // Incrementally step towards 85% while app loads
+          if (targetVal < 85) {
+            targetVal += (Math.random() * 8 + 4);
+            if (targetVal > 85) targetVal = 85;
+          }
+        }
+
+        if (currentVal < targetVal) {
+          currentVal += Math.max(1, (targetVal - currentVal) * 0.25);
+          if (Math.abs(targetVal - currentVal) < 0.5) currentVal = targetVal;
+          render(currentVal);
+        }
+      }, 50);
+
+      // Called when main window React is hydrated and ready-to-show
+      window.onAppReady = function(callback) {
+        if (hasCompleted) return;
+        appIsReady = true;
+        targetVal = 100;
+
+        // Drive quickly and smoothly to 100%
+        const finishTimer = setInterval(() => {
+          if (currentVal < 100) {
+            currentVal += 5;
+            if (currentVal >= 100) {
+              currentVal = 100;
+              render(100);
+              clearInterval(finishTimer);
+              clearInterval(tickTimer);
+              hasCompleted = true;
+
+              // Give user a brief 350ms moment to see the 100% Ready completion state
+              setTimeout(() => {
+                document.body.classList.add('splash-fade-out');
+                if (typeof callback === 'function') {
+                  setTimeout(callback, 350);
+                }
+              }, 350);
+            } else {
+              render(currentVal);
+            }
+          }
+        }, 25);
+      };
+    })();
+  </script>
 </body>
 </html>
