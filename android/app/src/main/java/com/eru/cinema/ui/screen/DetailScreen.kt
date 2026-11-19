@@ -63,10 +63,6 @@ fun DetailScreen(
     var loadingEpisodes by remember { mutableStateOf(false) }
     var expandedOverview by remember { mutableStateOf(false) }
 
-    // Download dialog state
-    var showDownloadDialog by remember { mutableStateOf(false) }
-    var downloadTargetTitle by remember { mutableStateOf("") }
-
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(type, tmdbId) {
@@ -347,31 +343,6 @@ fun DetailScreen(
                                     fontSize = 15.sp
                                 )
                             }
-
-                            // Offline Download Button
-                            OutlinedButton(
-                                onClick = {
-                                    downloadTargetTitle = if (type == "movie") "${item.title} (${item.year})" else "${item.title} - Season $selectedSeason (All Episodes)"
-                                    showDownloadDialog = true
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, EruBorder),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(vertical = 14.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Download,
-                                    null,
-                                    tint = EruTeal,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    if (type == "movie") "Download Movie (+ English Subtitles)" else "Download Season $selectedSeason (All Episodes)",
-                                    color = EruTextPrimary,
-                                    fontSize = 14.sp
-                                )
-                            }
                         }
                     }
 
@@ -430,10 +401,6 @@ fun DetailScreen(
                                         selectedSeason = episode.seasonNumber
                                         selectedEpisode = episode.episodeNumber
                                         showPlayer = true
-                                    },
-                                    onDownload = {
-                                        downloadTargetTitle = "${item.title} - S${episode.seasonNumber}E${episode.episodeNumber}: ${episode.name}"
-                                        showDownloadDialog = true
                                     }
                                 )
                             }
@@ -458,54 +425,6 @@ fun DetailScreen(
                 }
             }
         }
-
-        // Offline Download Info Dialog
-        if (showDownloadDialog) {
-            AlertDialog(
-                onDismissRequest = { showDownloadDialog = false },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = EruTeal)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "Offline Streaming",
-                            color = EruTextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                    }
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = downloadTargetTitle,
-                            color = EruTeal,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = "Streaming Source Status:\n\n" +
-                                    "• Media Stream: Vidy.st Direct (1-source engine) serves encrypted, short-lived HLS tokenized segments protected by Cloudflare & anti-scraping keys.\n\n" +
-                                    "• English Subtitles: Vidy web embeds render live closed captions inside the player, but do not provide raw downloadable .vtt files without an external subtitle provider API (e.g. OpenSubtitles).\n\n" +
-                                    "Direct offline file dumping from Vidy is restricted by their server architecture. Offline downloads require an unprotected direct-link stream extractor or debrid resolver.",
-                            color = EruTextMuted,
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { showDownloadDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = EruTeal)
-                    ) {
-                        Text("Understood", color = EruBgDeep, fontWeight = FontWeight.Bold)
-                    }
-                },
-                containerColor = EruSurface1,
-                shape = RoundedCornerShape(12.dp)
-            )
-        }
     }
 }
 
@@ -513,8 +432,7 @@ fun DetailScreen(
 private fun EpisodeItem(
     episode: Episode,
     isSelected: Boolean,
-    onPlay: () -> Unit,
-    onDownload: (() -> Unit)? = null
+    onPlay: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -578,17 +496,6 @@ private fun EpisodeItem(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         lineHeight = 16.sp
-                    )
-                }
-            }
-
-            if (onDownload != null) {
-                IconButton(onClick = onDownload) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = "Download Episode",
-                        tint = EruTextMuted,
-                        modifier = Modifier.size(20.dp)
                     )
                 }
             }

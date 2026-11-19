@@ -4,8 +4,11 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Message
+import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -15,7 +18,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
@@ -53,14 +55,26 @@ fun PlayerView(
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var showControls by remember { mutableStateOf(true) }
+    var customView by remember { mutableStateOf<View?>(null) }
+    var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
 
-    // Lock screen orientation to Landscape and enable Immersive Fullscreen
+    // Lock screen orientation to Landscape and enable Immersive Fullscreen (Edge-to-Edge)
     DisposableEffect(Unit) {
         val originalOrientation = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
         val window = activity?.window
         if (window != null) {
+            // Extend into notch / display cutout areas for true full screen
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+
+            // Keep screen awake while watching video
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+            WindowCompat.setDecorFitsSystemWindows(window, false)
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -70,6 +84,7 @@ fun PlayerView(
             activity?.requestedOrientation = originalOrientation
             val win = activity?.window
             if (win != null) {
+                win.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 val controller = WindowCompat.getInsetsController(win, win.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
@@ -90,7 +105,12 @@ fun PlayerView(
     }
 
     BackHandler {
-        onClose()
+        if (customView != null) {
+            customViewCallback?.onCustomViewHidden()
+            customView = null
+        } else {
+            onClose()
+        }
     }
 
     Box(
@@ -114,6 +134,9 @@ fun PlayerView(
                         mediaPlaybackRequiresUserGesture = false
                         allowFileAccess = false
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        useWideViewPort = true
+                        loadWithOverviewMode = true
+                        setSupportZoom(false)
                         userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                     }
 
@@ -150,6 +173,16 @@ fun PlayerView(
                             // Block intrusive ad popups
                             return false
                         }
+
+                        override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                            customView = view
+                            customViewCallback = callback
+                        }
+
+                        override fun onHideCustomView() {
+                            customView = null
+                            customViewCallback = null
+                        }
                     }
 
                     loadUrl(streamUrl)
@@ -162,6 +195,14 @@ fun PlayerView(
                 }
             }
         )
+
+        // If web player triggers native HTML5 full screen, show custom view
+        if (customView != null) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { customView!! }
+            )
+        }
 
         // Tap interceptor layer when controls are hidden so touching screen shows HUD
         if (!showControls) {
@@ -188,9 +229,8 @@ fun PlayerView(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.82f))
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .background(Color.Black.copy(alpha = 0.85f))
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null

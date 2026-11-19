@@ -174,7 +174,7 @@ fun MainApp() {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(if (showBars) paddingValues else PaddingValues(0.dp))
                     .background(EruBgDeep)
             ) {
                 EruNavGraph(navController = navController)
