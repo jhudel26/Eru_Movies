@@ -108,15 +108,6 @@ fun DetailScreen(
             item = detail!!.item,
             season = selectedSeason,
             episode = selectedEpisode,
-            onNextEpisode = if (type == "tv") {
-                {
-                    val nextEp = selectedEpisode + 1
-                    val hasNext = episodes.any { it.episodeNumber == nextEp }
-                    if (hasNext) {
-                        selectedEpisode = nextEp
-                    }
-                }
-            } else null,
             onClose = { showPlayer = false }
         )
         return

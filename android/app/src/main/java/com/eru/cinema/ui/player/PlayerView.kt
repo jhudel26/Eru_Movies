@@ -15,15 +15,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,17 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.eru.cinema.data.api.VidyEngine
 import com.eru.cinema.data.model.MediaItem
-import com.eru.cinema.ui.theme.*
 import kotlinx.coroutines.delay
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -50,14 +41,13 @@ fun PlayerView(
     item: MediaItem,
     season: Int = 1,
     episode: Int = 1,
-    onNextEpisode: (() -> Unit)? = null,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var showControls by remember { mutableStateOf(true) }
+    var showBackArrow by remember { mutableStateOf(true) }
     var customView by remember { mutableStateOf<View?>(null) }
     var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
 
@@ -92,12 +82,10 @@ fun PlayerView(
         }
     }
 
-    // Auto-hide controls after 4 seconds of inactivity so Vidy's UI is completely unobstructed
-    LaunchedEffect(showControls) {
-        if (showControls) {
-            delay(4000)
-            showControls = false
-        }
+    // Minimal back arrow automatically fades away after 2.5 seconds
+    LaunchedEffect(Unit) {
+        delay(2500)
+        showBackArrow = false
     }
 
     // Direct 1-source Vidy streaming URL mirroring the desktop app
@@ -119,7 +107,7 @@ fun PlayerView(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Direct Vidy Stream Player in Android WebView (Receives 100% of touches with ZERO overlay blocking)
+        // Direct Vidy Stream Player in Android WebView (Zero touch interference)
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -204,109 +192,35 @@ fun PlayerView(
             )
         }
 
-        // Minimal floating back pill when top HUD is hidden (keeps bottom CC and quality 100% accessible)
-        if (!showControls) {
+        // Tiny, minimalist floating back arrow in top-left that fades away after 2.5s
+        AnimatedVisibility(
+            visible = showBackArrow,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 16.dp, top = 16.dp)
+        ) {
             IconButton(
-                onClick = { showControls = true },
+                onClick = onClose,
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 12.dp)
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f))
+                    .background(Color.Black.copy(alpha = 0.5f))
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Show Controls / Back",
-                    tint = Color.White,
+                    contentDescription = "Back",
+                    tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
-        // Top Cinema Player HUD with auto-hide animation (top only, never touches CC or quality controls)
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = Color.Black.copy(alpha = 0.85f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, EruBorder.copy(alpha = 0.6f))
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    IconButton(onClick = onClose) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White
-                        )
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 8.dp)
-                    ) {
-                        Text(
-                            text = item.title,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = if (item.type == "tv") "S${season} E${episode}" else item.year,
-                                color = EruTeal,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 11.sp
-                            )
-                            Text(
-                                text = "• Tap video for CC & Quality",
-                                color = EruTextMuted,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-
-                    // Next Episode button for TV series
-                    if (item.type == "tv" && onNextEpisode != null) {
-                        IconButton(onClick = onNextEpisode) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Next Episode",
-                                tint = Color.White
-                            )
-                        }
-                    }
-
-                    IconButton(onClick = { webViewInstance?.reload() }) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reload Stream",
-                            tint = EruTeal
-                        )
-                    }
-                }
-            }
-        }
-
+        // Subtle loading indicator when starting page
         if (isLoading) {
             LinearProgressIndicator(
-                color = EruTeal,
+                color = Color(0xFF00E5BC),
                 trackColor = Color.Transparent,
                 modifier = Modifier
                     .fillMaxWidth()
