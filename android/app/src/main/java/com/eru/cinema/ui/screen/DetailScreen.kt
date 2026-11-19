@@ -108,6 +108,12 @@ fun DetailScreen(
             item = detail!!.item,
             season = selectedSeason,
             episode = selectedEpisode,
+            episodes = episodes,
+            onSelectEpisode = { s, ep ->
+                selectedSeason = s
+                selectedEpisode = ep
+                HistoryManager.add(context, detail!!.item, s, ep)
+            },
             onClose = { showPlayer = false }
         )
         return
