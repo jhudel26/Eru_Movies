@@ -45,7 +45,12 @@ Unlike anime-specific applications, **ERU** focuses on western and international
 - **Teal Cinema UI/UX**:
   - Deep noir background (`#081114`) with glowing teal neon accents (`#00e5bc`, `#14f4c9`).
   - Glassmorphic translucent cards, ambient backdrop lighting, and smooth hover micro-interactions.
-  - Custom frameless title bar with integrated search and native window controls.
+  - Prominent unboxed brand logo with glowing dropshadow and frameless native window controls.
+
+- **Full-Bleed Cinematic Splash Screen**:
+  - App-matched 1320x840 startup sequence with ambient brand glow and cinema backdrop.
+  - Dynamic progress lifecycle with real-time status indicators and guaranteed 100% completion handshake.
+  - Seamless zero-flicker transition into the main cinema interface.
 
 - **Digital Availability Filtering**:
   - Automatically filters out movies that are only in movie theaters or have no digital/physical release yet.
