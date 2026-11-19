@@ -20,6 +20,7 @@ private val DarkColorScheme = darkColorScheme(
 fun ERUCinemaTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkColorScheme,
+        typography = EruTypography,
         content = content
     )
 }

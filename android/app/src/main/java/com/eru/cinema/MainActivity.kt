@@ -5,9 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,15 +15,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.eru.cinema.data.api.TmdbService
-import com.eru.cinema.data.model.MediaItem
-import com.eru.cinema.ui.components.MediaCard
-import com.eru.cinema.ui.player.PlayerView
-import com.eru.cinema.ui.theme.ERUCinemaTheme
-import com.eru.cinema.ui.theme.EruBgDeep
-import com.eru.cinema.ui.theme.EruSurface1
-import com.eru.cinema.ui.theme.EruTeal
-import kotlinx.coroutines.launch
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.eru.cinema.navigation.EruNavGraph
+import com.eru.cinema.navigation.EruRoutes
+import com.eru.cinema.ui.theme.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,48 +33,35 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+data class BottomNavItem(
+    val route: String,
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainApp() {
-    var selectedTab by remember { mutableStateOf(0) } // 0: Discover, 1: Movies, 2: TV Shows
-    var mediaItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
-    // Currently playing media item (1 source: Vidy Direct)
-    var selectedMedia by remember { mutableStateOf<MediaItem?>(null) }
+    val bottomNavItems = listOf(
+        BottomNavItem(EruRoutes.HOME, "Home", Icons.Default.Explore),
+        BottomNavItem(EruRoutes.MOVIES, "Movies", Icons.Default.Movie),
+        BottomNavItem(EruRoutes.TV, "TV Shows", Icons.Default.Tv),
+        BottomNavItem(EruRoutes.SEARCH, "Search", Icons.Default.Search),
+        BottomNavItem(EruRoutes.WATCHLIST, "My List", Icons.Default.Bookmark)
+    )
 
-    val scope = rememberCoroutineScope()
+    // Hide top and bottom bars on detail & settings screens
+    val isDetailScreen = currentRoute?.startsWith("detail") == true
+    val isSettingsScreen = currentRoute == EruRoutes.SETTINGS
+    val showBars = !isDetailScreen && !isSettingsScreen
 
-    fun loadContent(tab: Int) {
-        isLoading = true
-        scope.launch {
-            try {
-                mediaItems = when (tab) {
-                    0 -> TmdbService.getHomeCatalog().items
-                    1 -> TmdbService.getMovies()
-                    2 -> TmdbService.getTvShows()
-                    else -> emptyList()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    LaunchedEffect(selectedTab) {
-        loadContent(selectedTab)
-    }
-
-    if (selectedMedia != null) {
-        PlayerView(
-            item = selectedMedia!!,
-            onClose = { selectedMedia = null }
-        )
-    } else {
-        Scaffold(
-            topBar = {
+    Scaffold(
+        topBar = {
+            if (showBars) {
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -104,89 +85,75 @@ fun MainApp() {
                         titleContentColor = Color.White
                     ),
                     actions = {
-                        IconButton(onClick = { /* Search Dialog */ }) {
+                        IconButton(onClick = { navController.navigate(EruRoutes.SETTINGS) }) {
                             Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search",
-                                tint = Color.White
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = EruTextMuted
                             )
                         }
                     }
                 )
-            },
-            bottomBar = {
+            }
+        },
+        bottomBar = {
+            if (showBars) {
                 NavigationBar(
                     containerColor = EruSurface1,
-                    contentColor = Color.White
+                    contentColor = Color.White,
+                    tonalElevation = 8.dp
                 ) {
-                    NavigationBarItem(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        icon = { Icon(Icons.Default.Explore, contentDescription = "Discover") },
-                        label = { Text("Discover") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = EruTeal,
-                            selectedTextColor = EruTeal,
-                            indicatorColor = EruTeal.copy(alpha = 0.15f)
-                        )
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        icon = { Icon(Icons.Default.Movie, contentDescription = "Movies") },
-                        label = { Text("Movies") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = EruTeal,
-                            selectedTextColor = EruTeal,
-                            indicatorColor = EruTeal.copy(alpha = 0.15f)
-                        )
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        icon = { Icon(Icons.Default.Tv, contentDescription = "TV Shows") },
-                        label = { Text("TV Shows") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = EruTeal,
-                            selectedTextColor = EruTeal,
-                            indicatorColor = EruTeal.copy(alpha = 0.15f)
-                        )
-                    )
-                }
-            },
-            containerColor = EruBgDeep
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .background(EruBgDeep)
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        color = EruTeal,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 130.dp),
-                        contentPadding = PaddingValues(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(mediaItems, key = { it.id }) { item ->
-                            MediaCard(
-                                item = item,
-                                onClick = {
-                                    // Direct Vidy 1-source streaming
-                                    selectedMedia = item
+                    bottomNavItems.forEach { item ->
+                        val selected = currentRoute == item.route
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                if (currentRoute != item.route) {
+                                    navController.navigate(item.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = item.icon,
+                                    contentDescription = item.label,
+                                    tint = if (selected) EruTeal else EruTextMuted
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = item.label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selected) EruTeal else EruTextMuted
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = EruTeal,
+                                selectedTextColor = EruTeal,
+                                unselectedIconColor = EruTextMuted,
+                                unselectedTextColor = EruTextMuted,
+                                indicatorColor = EruTeal.copy(alpha = 0.15f)
                             )
-                        }
+                        )
                     }
                 }
             }
+        },
+        containerColor = EruBgDeep
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(EruBgDeep)
+        ) {
+            EruNavGraph(navController = navController)
         }
     }
 }
