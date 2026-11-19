@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.ERUCinema" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#081114</item>
+        <item name="android:navigationBarColor">#081114</item>
+        <item name="android:windowBackground">#081114</item>
+    </style>
+</resources>
