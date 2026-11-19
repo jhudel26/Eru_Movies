@@ -65,7 +65,7 @@ fun PlayerView(
     var currentEpisode by remember(episode) { mutableStateOf(episode) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var showTopBar by remember { mutableStateOf(true) }
+    var showControls by remember { mutableStateOf(true) }
     var showEpisodeDrawer by remember { mutableStateOf(false) }
     var customView by remember { mutableStateOf<View?>(null) }
     var customViewCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
@@ -101,11 +101,11 @@ fun PlayerView(
         }
     }
 
-    // Auto-hide top bar after 3.5 seconds unless drawer is open
-    LaunchedEffect(showTopBar, showEpisodeDrawer) {
-        if (showTopBar && !showEpisodeDrawer) {
-            delay(3500)
-            showTopBar = false
+    // Auto-hide controls after 4.5 seconds unless drawer is open
+    LaunchedEffect(showControls, showEpisodeDrawer) {
+        if (showControls && !showEpisodeDrawer) {
+            delay(4500)
+            showControls = false
         }
     }
 
@@ -137,7 +137,7 @@ fun PlayerView(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Direct Vidy Stream Player in Android WebView (Zero touch interference)
+        // Direct Vidy Stream Player in Android WebView
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -222,135 +222,131 @@ fun PlayerView(
             )
         }
 
-        // Top Navigation & TV Controls (Positioned at TOP only, never covers bottom CC & Quality)
-        AnimatedVisibility(
-            visible = showTopBar || showEpisodeDrawer,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+        // Tap listener on upper 70% of screen to reveal controls when hidden
+        // (Bottom 30% is ALWAYS direct-to-WebView so Vidy's CC & Quality controls are NEVER blocked)
+        if (!showControls && !showEpisodeDrawer) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .fillMaxHeight(0.70f)
+                    .align(Alignment.TopCenter)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        showControls = true
+                    }
+            )
+        }
+
+        // 1. Minimalist Back Button (Top-Left)
+        AnimatedVisibility(
+            visible = showControls || showEpisodeDrawer,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 16.dp, top = 16.dp)
+        ) {
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f))
             ) {
-                // Left: Floating Back Button + Title
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        // 2. Episode Selector (Center-Right part of the screen)
+        if (item.type == "tv" && episodes.isNotEmpty()) {
+            AnimatedVisibility(
+                visible = showControls || showEpisodeDrawer,
+                enter = fadeIn() + slideInHorizontally(initialOffsetX = { it }),
+                exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it }),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 16.dp)
+            ) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.65f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, EruBorder.copy(alpha = 0.5f))
+                    color = if (showEpisodeDrawer) EruTeal else Color.Black.copy(alpha = 0.70f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, EruTeal.copy(alpha = 0.6f)),
+                    modifier = Modifier.clickable {
+                        showEpisodeDrawer = !showEpisodeDrawer
+                    }
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
                     ) {
-                        IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        if (item.type == "tv") {
-                            Text(
-                                text = "S${currentSeason} E${currentEpisode}",
-                                color = EruTeal,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(end = 12.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Right: TV Show Episode Selection & Next Episode Controls
-                if (item.type == "tv" && episodes.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // "Episodes" Selection Button
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (showEpisodeDrawer) EruTeal else Color.Black.copy(alpha = 0.65f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, EruBorder.copy(alpha = 0.5f)),
-                            modifier = Modifier.clickable {
-                                showEpisodeDrawer = !showEpisodeDrawer
-                            }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.VideoLibrary,
-                                    contentDescription = "Episodes",
-                                    tint = if (showEpisodeDrawer) EruBgDeep else Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = "Episodes",
-                                    color = if (showEpisodeDrawer) EruBgDeep else Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // "Next Episode" Button (if available)
-                        if (nextEpisodeItem != null) {
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = EruTeal.copy(alpha = 0.25f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, EruTeal.copy(alpha = 0.6f)),
-                                modifier = Modifier.clickable {
-                                    val nextEpNum = currentEpisode + 1
-                                    currentEpisode = nextEpNum
-                                    onSelectEpisode?.invoke(currentSeason, nextEpNum)
-                                }
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                                ) {
-                                    Text(
-                                        text = "Next Ep",
-                                        color = EruTeal,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.SkipNext,
-                                        contentDescription = "Next Episode",
-                                        tint = EruTeal,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
+                        Icon(
+                            imageVector = Icons.Default.VideoLibrary,
+                            contentDescription = "Episode Selector",
+                            tint = if (showEpisodeDrawer) EruBgDeep else EruTeal,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Episodes",
+                            color = if (showEpisodeDrawer) EruBgDeep else Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
         }
 
-        // Minimalist top-left hit zone when controls are hidden to reveal them
-        if (!showTopBar && !showEpisodeDrawer) {
-            Box(
+        // 3. Next Episode Button (Above the status/scrubber bar at bottom-right)
+        if (item.type == "tv" && nextEpisodeItem != null) {
+            AnimatedVisibility(
+                visible = showControls && !showEpisodeDrawer,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .size(64.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        showTopBar = true
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 68.dp) // Elevated cleanly above Vidy's bottom bar
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = EruTeal,
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.clickable {
+                        val nextEpNum = currentEpisode + 1
+                        currentEpisode = nextEpNum
+                        onSelectEpisode?.invoke(currentSeason, nextEpNum)
                     }
-            )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "Next Ep",
+                            color = EruBgDeep,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "Next Episode",
+                            tint = EruBgDeep,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
         }
 
-        // Sleek Slide-In Episode Selection Drawer (right side only, semi-transparent)
+        // Slide-In Episode Selection Drawer from Right Edge
         AnimatedVisibility(
             visible = showEpisodeDrawer,
             enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
@@ -361,7 +357,7 @@ fun PlayerView(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(320.dp),
-                color = Color.Black.copy(alpha = 0.92f),
+                color = Color.Black.copy(alpha = 0.94f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, EruBorder)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
