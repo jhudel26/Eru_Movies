@@ -58,7 +58,7 @@ fun MainApp() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     val bottomNavItems = listOf(
-        BottomNavItem(EruRoutes.HOME, "Home", Icons.Default.Explore),
+        BottomNavItem(EruRoutes.HOME, "Home", Icons.Default.Home),
         BottomNavItem(EruRoutes.MOVIES, "Movies", Icons.Default.Movie),
         BottomNavItem(EruRoutes.TV, "TV Shows", Icons.Default.Tv),
         BottomNavItem(EruRoutes.SEARCH, "Search", Icons.Default.Search),

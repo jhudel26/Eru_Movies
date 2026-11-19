@@ -7,9 +7,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.eru.cinema.data.api.TmdbService
+import com.eru.cinema.data.local.HistoryItem
+import com.eru.cinema.data.local.HistoryManager
 import com.eru.cinema.data.model.HomeCatalog
 import com.eru.cinema.data.model.MediaItem
 import com.eru.cinema.navigation.EruRoutes
@@ -21,11 +24,14 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(navController: NavController) {
+    val context = LocalContext.current
     var catalog by remember { mutableStateOf<HomeCatalog?>(null) }
+    var history by remember { mutableStateOf<List<HistoryItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
+        history = HistoryManager.getAll(context)
         scope.launch {
             try {
                 catalog = TmdbService.getHomeCatalog()
@@ -61,6 +67,19 @@ fun HomeScreen(navController: NavController) {
                                 navController.navigate(EruRoutes.detail(item.type, item.tmdbId))
                             }
                         )
+                    }
+
+                    // Continue Watching from Watch History
+                    if (history.isNotEmpty()) {
+                        item {
+                            ContentRow(
+                                title = "Continue Watching",
+                                items = history.map { it.item },
+                                onItemClick = { item ->
+                                    navController.navigate(EruRoutes.detail(item.type, item.tmdbId))
+                                }
+                            )
+                        }
                     }
 
                     // Trending Movies row

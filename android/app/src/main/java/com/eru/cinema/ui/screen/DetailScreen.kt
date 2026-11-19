@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.eru.cinema.data.api.TmdbService
+import com.eru.cinema.data.local.HistoryManager
 import com.eru.cinema.data.local.WatchlistManager
 import com.eru.cinema.data.model.Episode
 import com.eru.cinema.data.model.MediaDetail
@@ -300,6 +301,7 @@ fun DetailScreen(
                                     if (type == "tv" && episodes.isNotEmpty()) {
                                         selectedEpisode = episodes.first().episodeNumber
                                     }
+                                    HistoryManager.add(context, item, selectedSeason, selectedEpisode)
                                     showPlayer = true
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -400,6 +402,7 @@ fun DetailScreen(
                                     onPlay = {
                                         selectedSeason = episode.seasonNumber
                                         selectedEpisode = episode.episodeNumber
+                                        HistoryManager.add(context, item, episode.seasonNumber, episode.episodeNumber)
                                         showPlayer = true
                                     }
                                 )
