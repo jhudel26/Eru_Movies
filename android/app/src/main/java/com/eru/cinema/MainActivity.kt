@@ -18,10 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.eru.cinema.data.api.StreamResolver
 import com.eru.cinema.data.api.TmdbService
 import com.eru.cinema.data.model.MediaItem
-import com.eru.cinema.data.model.StreamServer
 import com.eru.cinema.ui.components.MediaCard
 import com.eru.cinema.ui.player.PlayerView
 import com.eru.cinema.ui.theme.ERUCinemaTheme
@@ -47,10 +45,9 @@ fun MainApp() {
     var selectedTab by remember { mutableStateOf(0) } // 0: Discover, 1: Movies, 2: TV Shows
     var mediaItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var searchQuery by remember { mutableStateOf("") }
 
-    // Player state
-    var activeServers by remember { mutableStateOf<List<StreamServer>?>(null) }
+    // Currently playing media item (1 source: Vidy Direct)
+    var selectedMedia by remember { mutableStateOf<MediaItem?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -76,10 +73,10 @@ fun MainApp() {
         loadContent(selectedTab)
     }
 
-    if (activeServers != null) {
+    if (selectedMedia != null) {
         PlayerView(
-            servers = activeServers!!,
-            onClose = { activeServers = null }
+            item = selectedMedia!!,
+            onClose = { selectedMedia = null }
         )
     } else {
         Scaffold(
@@ -90,7 +87,7 @@ fun MainApp() {
                             Text(
                                 text = "ERU",
                                 fontWeight = FontWeight.Black,
-                                fontSize = 20.sp,
+                                fontSize = 21.sp,
                                 color = EruTeal
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -182,15 +179,8 @@ fun MainApp() {
                             MediaCard(
                                 item = item,
                                 onClick = {
-                                    // Open Player
-                                    val embed = if (item.type == "movie") {
-                                        StreamResolver.resolveMovie(item.tmdbId, item.imdbId)
-                                    } else {
-                                        StreamResolver.resolveTv(item.tmdbId, 1, 1, item.imdbId)
-                                    }
-                                    if (embed.servers.isNotEmpty()) {
-                                        activeServers = embed.servers
-                                    }
+                                    // Direct Vidy 1-source streaming
+                                    selectedMedia = item
                                 }
                             )
                         }

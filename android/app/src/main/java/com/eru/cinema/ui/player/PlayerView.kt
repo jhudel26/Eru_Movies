@@ -7,35 +7,40 @@ import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.eru.cinema.data.model.StreamServer
+import com.eru.cinema.data.api.VidyEngine
+import com.eru.cinema.data.model.MediaItem
 import com.eru.cinema.ui.theme.*
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun PlayerView(
-    servers: List<StreamServer>,
+    item: MediaItem,
+    season: Int = 1,
+    episode: Int = 1,
     onClose: () -> Unit
 ) {
-    var selectedServerIndex by remember { mutableStateOf(0) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    val currentUrl = servers.getOrNull(selectedServerIndex)?.url ?: ""
+    // Direct 1-source Vidy streaming URL mirroring the desktop app
+    val streamUrl = remember(item.tmdbId, season, episode) {
+        VidyEngine.getStreamUrl(item.type, item.tmdbId, season, episode)
+    }
 
     BackHandler {
         onClose()
@@ -46,7 +51,7 @@ fun PlayerView(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Embed Player WebView
+        // Direct Vidy Stream Player in Android WebView
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
@@ -62,7 +67,7 @@ fun PlayerView(
                         mediaPlaybackRequiresUserGesture = false
                         allowFileAccess = false
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+                        userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                     }
 
                     webViewClient = object : WebViewClient() {
@@ -95,76 +100,76 @@ fun PlayerView(
                             isUserGesture: Boolean,
                             resultMsg: Message?
                         ): Boolean {
-                            // Suppress popup ads
+                            // Block intrusive ad popups
                             return false
                         }
                     }
 
-                    loadUrl(currentUrl)
+                    loadUrl(streamUrl)
                     webViewInstance = this
                 }
             },
             update = { webView ->
-                if (webView.url != currentUrl) {
-                    webView.loadUrl(currentUrl)
+                if (webView.url != streamUrl) {
+                    webView.loadUrl(streamUrl)
                 }
             }
         )
 
-        // Top Control HUD Bar
-        Column(
+        // Top Cinema Player HUD
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color.Black.copy(alpha = 0.75f))
                 .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+            IconButton(onClick = onClose) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
             ) {
-                IconButton(onClick = onClose) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
+                Text(
+                    text = item.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = if (item.type == "tv") "S${season} E${episode}" else item.year,
+                        color = EruTeal,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
                     )
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                IconButton(onClick = { webViewInstance?.reload() }) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reload",
-                        tint = EruTeal
+                    Text(
+                        text = "• Vidy Direct",
+                        color = EruTextMuted,
+                        fontSize = 11.sp
                     )
                 }
             }
 
-            // Server Selector Pills
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                servers.forEachIndexed { index, server ->
-                    val isSelected = index == selectedServerIndex
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { selectedServerIndex = index },
-                        label = { Text(server.name, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = EruTeal,
-                            selectedLabelColor = Color.Black,
-                            containerColor = EruSurface2,
-                            labelColor = EruTextPrimary
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                }
+            IconButton(onClick = { webViewInstance?.reload() }) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Reload Stream",
+                    tint = EruTeal
+                )
             }
         }
 

@@ -1,7 +1,5 @@
 package com.eru.cinema.data.model
 
-import com.google.gson.annotations.SerializedName
-
 data class MediaItem(
     val id: String,
     val tmdbId: Long = 0,
@@ -22,16 +20,4 @@ data class MediaItem(
 data class HomeCatalog(
     val heroes: List<MediaItem>,
     val items: List<MediaItem>
-)
-
-data class StreamServer(
-    val id: String,
-    val name: String,
-    val url: String,
-    val quality: String = "HD"
-)
-
-data class StreamEmbedResponse(
-    val embedUrl: String?,
-    val servers: List<StreamServer>
 )
