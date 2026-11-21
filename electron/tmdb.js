@@ -1,5 +1,4 @@
-const TMDB_DEFAULT_KEY = 'c1dd4a7d9aab18675dc3720ab5a99436';
-const TMDB_KEY = process.env.TMDB_API_KEY || TMDB_DEFAULT_KEY;
+const TMDB_KEY = process.env.TMDB_API_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
@@ -10,6 +9,8 @@ const PROFILE_MD = `${IMAGE_BASE}/w185`;
 const STILL_MD = `${IMAGE_BASE}/w500`;
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+const { tmdbLogger } = require('./logger');
 
 // Genre ID to Name Dictionary
 const GENRE_MAP = {
@@ -44,10 +45,11 @@ const GENRE_MAP = {
   10768: 'War & Politics'
 };
 
-// In-memory TTL Cache with max size limit to prevent memory leaks
+// In-memory TTL Cache with proper LRU eviction and request deduplication
 class MemoryCache {
   constructor(maxEntries = 300) {
-    this.store = new Map();
+    this.store = new Map(); // key -> { data, timestamp, accessTime }
+    this.pending = new Map(); // key -> Promise (for request deduplication)
     this.maxEntries = maxEntries;
   }
 
@@ -58,20 +60,52 @@ class MemoryCache {
       this.store.delete(key);
       return null;
     }
+    // Update access time for LRU
+    entry.accessTime = Date.now();
     return entry.data;
   }
 
   set(key, data) {
+    // Evict LRU if at capacity
     if (this.store.size >= this.maxEntries) {
-      // Evict oldest entry
-      const oldestKey = this.store.keys().next().value;
-      if (oldestKey) this.store.delete(oldestKey);
+      let lruKey = null;
+      let lruTime = Infinity;
+      for (const [k, v] of this.store.entries()) {
+        if (v.accessTime < lruTime) {
+          lruTime = v.accessTime;
+          lruKey = k;
+        }
+      }
+      if (lruKey) this.store.delete(lruKey);
     }
-    this.store.set(key, { data, timestamp: Date.now() });
+    this.store.set(key, { data, timestamp: Date.now(), accessTime: Date.now() });
+  }
+
+  // Request deduplication: returns existing promise or creates new one
+  async fetchOrSet(key, fetcher, ttlMs = 3600000) {
+    const cached = this.get(key, ttlMs);
+    if (cached !== null) return cached;
+
+    // Return existing in-flight request
+    if (this.pending.has(key)) {
+      return this.pending.get(key);
+    }
+
+    // Create new request
+    const promise = fetcher().then(data => {
+      this.set(key, data);
+      return data;
+    }).finally(() => {
+      this.pending.delete(key);
+    });
+
+    this.pending.set(key, promise);
+    return promise;
   }
 
   clear() {
     this.store.clear();
+    this.pending.clear();
   }
 }
 
@@ -81,7 +115,7 @@ async function fetchJson(endpoint, params = {}) {
   const url = new URL(`${TMDB_BASE}${endpoint}`);
   url.searchParams.set('api_key', TMDB_KEY);
   url.searchParams.set('language', 'en-US');
-  
+
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null) {
       url.searchParams.set(k, String(v));
@@ -92,6 +126,7 @@ async function fetchJson(endpoint, params = {}) {
   const fetchFn = (typeof globalThis.fetch === 'function') ? globalThis.fetch : fetch;
 
   try {
+    tmdbLogger.debug('TMDB request', { endpoint, params });
     const res = await fetchFn(urlStr, {
       headers: {
         'User-Agent': USER_AGENT,
@@ -100,12 +135,12 @@ async function fetchJson(endpoint, params = {}) {
       signal: AbortSignal.timeout(10000)
     });
     if (!res.ok) {
-      console.warn(`[TMDB] HTTP ${res.status} for ${endpoint}`);
+      tmdbLogger.warn('TMDB HTTP error', { endpoint, status: res.status });
       return null;
     }
     return await res.json();
   } catch (err) {
-    console.error(`[TMDB] Fetch error for ${endpoint}:`, err.message);
+    tmdbLogger.error('TMDB fetch error', { endpoint, error: err.message });
     return null;
   }
 }
@@ -205,55 +240,49 @@ function normalizeTv(t) {
 const TMDB = {
   async getTrendingMovies(page = 1) {
     const key = `trending_movies_${page}`;
-    const cached = cache.get(key, 3600000);
-    if (cached) return cached;
-
-    const data = await fetchJson('/trending/movie/week', { page });
-    const results = (data?.results || [])
-      .map(normalizeMovie)
-      .filter(Boolean)
-      .filter(isAvailableItem);
-
-    if (results.length > 0) cache.set(key, results);
-    return results;
+    return cache.fetchOrSet(key, async () => {
+      const data = await fetchJson('/trending/movie/week', { page });
+      const results = (data?.results || [])
+        .map(normalizeMovie)
+        .filter(Boolean)
+        .filter(isAvailableItem);
+      return results;
+    }, 3600000);
   },
 
   async getPopularMovies(page = 1) {
     const key = `popular_movies_digital_${page}`;
-    const cached = cache.get(key, 3600000);
-    if (cached) return cached;
-
-    const today = getTodayString();
-    // Prioritize confirmed digital or physical online releases
-    let data = await fetchJson('/discover/movie', {
-      page,
-      sort_by: 'popularity.desc',
-      'release_date.lte': today,
-      'with_release_type': '4|5',
-      'vote_count.gte': 10
-    });
-
-    let results = (data?.results || [])
-      .map(normalizeMovie)
-      .filter(Boolean)
-      .filter(isAvailableItem);
-
-    // If digital discover is empty, fallback to released movies with votes up to today
-    if (results.length === 0) {
-      data = await fetchJson('/discover/movie', {
+    return cache.fetchOrSet(key, async () => {
+      const today = getTodayString();
+      // Prioritize confirmed digital or physical online releases
+      let data = await fetchJson('/discover/movie', {
         page,
         sort_by: 'popularity.desc',
         'release_date.lte': today,
-        'vote_count.gte': 15
+        'with_release_type': '4|5',
+        'vote_count.gte': 10
       });
-      results = (data?.results || [])
+
+      let results = (data?.results || [])
         .map(normalizeMovie)
         .filter(Boolean)
         .filter(isAvailableItem);
-    }
 
-    if (results.length > 0) cache.set(key, results);
-    return results;
+      // If digital discover is empty, fallback to released movies with votes up to today
+      if (results.length === 0) {
+        data = await fetchJson('/discover/movie', {
+          page,
+          sort_by: 'popularity.desc',
+          'release_date.lte': today,
+          'vote_count.gte': 15
+        });
+        results = (data?.results || [])
+          .map(normalizeMovie)
+          .filter(Boolean)
+          .filter(isAvailableItem);
+      }
+      return results;
+    }, 3600000);
   },
 
   async getTrendingTv(page = 1) {
@@ -273,61 +302,56 @@ const TMDB = {
 
   async getPopularTv(page = 1) {
     const key = `popular_tv_aired_${page}`;
-    const cached = cache.get(key, 3600000);
-    if (cached) return cached;
+    return cache.fetchOrSet(key, async () => {
+      const today = getTodayString();
+      const data = await fetchJson('/discover/tv', {
+        page,
+        sort_by: 'popularity.desc',
+        'first_air_date.lte': today,
+        'vote_count.gte': 10
+      });
 
-    const today = getTodayString();
-    const data = await fetchJson('/discover/tv', {
-      page,
-      sort_by: 'popularity.desc',
-      'first_air_date.lte': today,
-      'vote_count.gte': 10
-    });
-
-    const results = (data?.results || [])
-      .map(normalizeTv)
-      .filter(Boolean)
-      .filter(isAvailableItem);
-
-    if (results.length > 0) cache.set(key, results);
-    return results;
+      const results = (data?.results || [])
+        .map(normalizeTv)
+        .filter(Boolean)
+        .filter(isAvailableItem);
+      return results;
+    }, 3600000);
   },
 
   async getHomeData() {
     const key = 'home_data';
-    const cached = cache.get(key, 1800000); // 30 min
-    if (cached) return cached;
+    return cache.fetchOrSet(key, async () => {
+      const [trendingMovies, popularMovies, trendingTv, popularTv] = await Promise.all([
+        this.getTrendingMovies(1),
+        this.getPopularMovies(1),
+        this.getTrendingTv(1),
+        this.getPopularTv(1)
+      ]);
 
-    const [trendingMovies, popularMovies, trendingTv, popularTv] = await Promise.all([
-      this.getTrendingMovies(1),
-      this.getPopularMovies(1),
-      this.getTrendingTv(1),
-      this.getPopularTv(1)
-    ]);
+      // Build Hero Banner items (top trending movies with backdrop + top trending tv)
+      const heroes = [];
+      const heroMovies = trendingMovies.filter(m => m.backdrop && m.poster).slice(0, 5);
+      const heroTv = trendingTv.filter(t => t.backdrop && t.poster).slice(0, 3);
+      heroes.push(...heroMovies, ...heroTv);
 
-    // Build Hero Banner items (top trending movies with backdrop + top trending tv)
-    const heroes = [];
-    const heroMovies = trendingMovies.filter(m => m.backdrop && m.poster).slice(0, 5);
-    const heroTv = trendingTv.filter(t => t.backdrop && t.poster).slice(0, 3);
-    heroes.push(...heroMovies, ...heroTv);
-
-    // Merge and deduplicate items
-    const seen = new Set();
-    const items = [];
-    for (const item of [...trendingMovies, ...trendingTv, ...popularMovies, ...popularTv]) {
-      if (item && !seen.has(item.id)) {
-        seen.add(item.id);
-        items.push(item);
+      // Merge and deduplicate items
+      const seen = new Set();
+      const items = [];
+      for (const item of [...trendingMovies, ...trendingTv, ...popularMovies, ...popularTv]) {
+        if (item && !seen.has(item.id)) {
+          seen.add(item.id);
+          items.push(item);
+        }
       }
-    }
 
-    const payload = {
-      heroes: heroes.map(h => ({ ...h, isHero: true })),
-      items
-    };
+      const payload = {
+        heroes: heroes.map(h => ({ ...h, isHero: true })),
+        items
+      };
 
-    if (items.length > 0) cache.set(key, payload);
-    return payload;
+      return payload;
+    }, 1800000); // 30 min
   },
 
   async getMovies() {
@@ -366,143 +390,134 @@ const TMDB = {
     if (!query || !query.trim()) return [];
     const q = query.trim();
     const key = `search_${q.toLowerCase()}`;
-    const cached = cache.get(key, 900000); // 15 min
-    if (cached) return cached;
+    return cache.fetchOrSet(key, async () => {
+      const data = await fetchJson('/search/multi', {
+        query: q,
+        include_adult: 'false'
+      });
 
-    const data = await fetchJson('/search/multi', {
-      query: q,
-      include_adult: 'false'
-    });
-
-    const results = [];
-    for (const item of (data?.results || [])) {
-      if (item.media_type === 'movie') {
-        const norm = normalizeMovie(item);
-        if (norm && isAvailableItem(norm)) results.push(norm);
-      } else if (item.media_type === 'tv') {
-        const norm = normalizeTv(item);
-        if (norm && isAvailableItem(norm)) results.push(norm);
+      const results = [];
+      for (const item of (data?.results || [])) {
+        if (item.media_type === 'movie') {
+          const norm = normalizeMovie(item);
+          if (norm && isAvailableItem(norm)) results.push(norm);
+        } else if (item.media_type === 'tv') {
+          const norm = normalizeTv(item);
+          if (norm && isAvailableItem(norm)) results.push(norm);
+        }
       }
-    }
 
-    // Sort by popularity
-    results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-
-    if (results.length > 0) cache.set(key, results);
-    return results;
+      // Sort by popularity
+      results.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+      return results;
+    }, 900000); // 15 min
   },
 
   async getMovieDetail(movieId) {
     const key = `movie_detail_${movieId}`;
-    const cached = cache.get(key, 43200000); // 12 hours
-    if (cached) return cached;
+    return cache.fetchOrSet(key, async () => {
+      const data = await fetchJson(`/movie/${movieId}`, {
+        append_to_response: 'credits,images,videos,external_ids,recommendations,similar'
+      });
+      if (!data) return null;
 
-    const data = await fetchJson(`/movie/${movieId}`, {
-      append_to_response: 'credits,images,videos,external_ids,recommendations,similar'
-    });
-    if (!data) return null;
+      const base = normalizeMovie(data);
+      base.imdbId = data.imdb_id || data.external_ids?.imdb_id || null;
+      base.tagline = data.tagline || '';
+      base.runtime = data.runtime ? `${data.runtime} min` : null;
+      base.status = data.status || '';
 
-    const base = normalizeMovie(data);
-    base.imdbId = data.imdb_id || data.external_ids?.imdb_id || null;
-    base.tagline = data.tagline || '';
-    base.runtime = data.runtime ? `${data.runtime} min` : null;
-    base.status = data.status || '';
+      // Credits
+      const credits = data.credits || {};
+      const cast = (credits.cast || []).slice(0, 15).map(p => ({
+        name: p.name,
+        character: p.character,
+        profile: p.profile_path ? `${PROFILE_MD}${p.profile_path}` : null
+      }));
+      const director = credits.crew?.find(p => p.job === 'Director')?.name || null;
 
-    // Credits
-    const credits = data.credits || {};
-    const cast = (credits.cast || []).slice(0, 15).map(p => ({
-      name: p.name,
-      character: p.character,
-      profile: p.profile_path ? `${PROFILE_MD}${p.profile_path}` : null
-    }));
-    const director = credits.crew?.find(p => p.job === 'Director')?.name || null;
+      // Videos / Trailers
+      const videos = data.videos?.results || [];
+      const trailer = videos.find(v => v.site === 'YouTube' && v.type === 'Trailer' && v.official)
+        || videos.find(v => v.site === 'YouTube' && v.type === 'Trailer')
+        || videos.find(v => v.site === 'YouTube');
 
-    // Videos / Trailers
-    const videos = data.videos?.results || [];
-    const trailer = videos.find(v => v.site === 'YouTube' && v.type === 'Trailer' && v.official)
-      || videos.find(v => v.site === 'YouTube' && v.type === 'Trailer')
-      || videos.find(v => v.site === 'YouTube');
+      base.cast = cast;
+      base.director = director;
+      base.trailerKey = trailer ? trailer.key : null;
+      base.trailerUrl = trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
 
-    base.cast = cast;
-    base.director = director;
-    base.trailerKey = trailer ? trailer.key : null;
-    base.trailerUrl = trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
-
-    cache.set(key, base);
-    return base;
+      return base;
+    }, 43200000); // 12 hours
   },
 
   async getTvDetail(tvId) {
     const key = `tv_detail_${tvId}`;
-    const cached = cache.get(key, 43200000); // 12 hours
-    if (cached) return cached;
+    return cache.fetchOrSet(key, async () => {
+      const data = await fetchJson(`/tv/${tvId}`, {
+        append_to_response: 'credits,images,videos,external_ids,recommendations,similar'
+      });
+      if (!data) return null;
 
-    const data = await fetchJson(`/tv/${tvId}`, {
-      append_to_response: 'credits,images,videos,external_ids,recommendations,similar'
-    });
-    if (!data) return null;
+      const base = normalizeTv(data);
+      base.imdbId = data.imdb_id || data.external_ids?.imdb_id || null;
+      base.tagline = data.tagline || '';
+      base.status = data.status || '';
 
-    const base = normalizeTv(data);
-    base.imdbId = data.imdb_id || data.external_ids?.imdb_id || null;
-    base.tagline = data.tagline || '';
-    base.status = data.status || '';
-
-    // Seasons array [1, 2, 3, ...]
-    const seasonList = [];
-    if (data.seasons && data.seasons.length > 0) {
-      for (const s of data.seasons) {
-        if (s.season_number > 0) seasonList.push(s.season_number);
+      // Seasons array [1, 2, 3, ...]
+      const seasonList = [];
+      if (data.seasons && data.seasons.length > 0) {
+        for (const s of data.seasons) {
+          if (s.season_number > 0) seasonList.push(s.season_number);
+        }
       }
-    }
-    if (seasonList.length === 0) {
-      const numSeasons = data.number_of_seasons || 1;
-      for (let i = 1; i <= numSeasons; i++) seasonList.push(i);
-    }
-    base.seasons = seasonList;
-    base.numberOfSeasons = seasonList.length;
+      if (seasonList.length === 0) {
+        const numSeasons = data.number_of_seasons || 1;
+        for (let i = 1; i <= numSeasons; i++) seasonList.push(i);
+      }
+      base.seasons = seasonList;
+      base.numberOfSeasons = seasonList.length;
 
-    // Credits
-    const credits = data.credits || {};
-    const cast = (credits.cast || []).slice(0, 15).map(p => ({
-      name: p.name,
-      character: p.character,
-      profile: p.profile_path ? `${PROFILE_MD}${p.profile_path}` : null
-    }));
+      // Credits
+      const credits = data.credits || {};
+      const cast = (credits.cast || []).slice(0, 15).map(p => ({
+        name: p.name,
+        character: p.character,
+        profile: p.profile_path ? `${PROFILE_MD}${p.profile_path}` : null
+      }));
 
-    // Videos / Trailers
-    const videos = data.videos?.results || [];
-    const trailer = videos.find(v => v.site === 'YouTube' && v.type === 'Trailer' && v.official)
-      || videos.find(v => v.site === 'YouTube' && v.type === 'Trailer')
-      || videos.find(v => v.site === 'YouTube');
+      // Videos / Trailers
+      const videos = data.videos?.results || [];
+      const trailer = videos.find(v => v.site === 'YouTube' && v.type === 'Trailer' && v.official)
+        || videos.find(v => v.site === 'YouTube' && v.type === 'Trailer')
+        || videos.find(v => v.site === 'YouTube');
 
-    base.cast = cast;
-    base.trailerKey = trailer ? trailer.key : null;
-    base.trailerUrl = trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
+      base.cast = cast;
+      base.trailerKey = trailer ? trailer.key : null;
+      base.trailerUrl = trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
 
-    cache.set(key, base);
-    return base;
+      return base;
+    }, 43200000); // 12 hours
   },
 
   async getSeasonEpisodes(tvId, seasonNumber = 1) {
     const key = `tv_episodes_${tvId}_s${seasonNumber}`;
-    const cached = cache.get(key, 43200000);
-    if (cached) return cached;
+    return cache.fetchOrSet(key, async () => {
+      const data = await fetchJson(`/tv/${tvId}/season/${seasonNumber}`);
+      if (!data?.episodes) return [];
 
-    const data = await fetchJson(`/tv/${tvId}/season/${seasonNumber}`);
-    if (!data?.episodes) return [];
+      const episodes = data.episodes.map(ep => ({
+        number: ep.episode_number,
+        title: ep.name || `Episode ${ep.episode_number}`,
+        thumbnail: ep.still_path ? `${STILL_MD}${ep.still_path}` : null,
+        overview: ep.overview || '',
+        airDate: ep.air_date || '',
+        rating: ep.vote_average ? Number(ep.vote_average).toFixed(1) : null,
+        runtime: ep.runtime ? `${ep.runtime} min` : null
+      }));
 
-    const episodes = data.episodes.map(ep => ({
-      number: ep.episode_number,
-      title: ep.name || `Episode ${ep.episode_number}`,
-      thumbnail: ep.still_path ? `${STILL_MD}${ep.still_path}` : null,
-      overview: ep.overview || '',
-      airDate: ep.air_date || '',
-      rating: ep.vote_average ? Number(ep.vote_average).toFixed(1) : null,
-      runtime: ep.runtime ? `${ep.runtime} min` : null
-    }));
-
-    cache.set(key, episodes);
-    return episodes;
+      return episodes;
+    }, 43200000);
   },
 
   // Resolve ID helper: accepts numeric ID, slug string, or title

@@ -152,7 +152,7 @@ fun PlayerView(
                         domStorageEnabled = true
                         mediaPlaybackRequiresUserGesture = false
                         allowFileAccess = false
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                         useWideViewPort = true
                         loadWithOverviewMode = true
                         setSupportZoom(false)

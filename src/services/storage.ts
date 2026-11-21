@@ -2,6 +2,14 @@ const WATCHLIST_KEY = 'eru_watchlist';
 const HISTORY_KEY = 'eru_history';
 const SETTINGS_KEY = 'eru_settings';
 
+const DEFAULT_SETTINGS = {
+  defaultSource: 'vidy',
+  autoplayNext: true,
+  cinemaMode: true,
+  accentColor: 'teal',
+  hideUnavailable: true,
+} as const;
+
 export const StorageService = {
   // Watchlist / Bookmarks
   getWatchlist() {
@@ -73,21 +81,10 @@ export const StorageService = {
   getSettings() {
     try {
       const data = localStorage.getItem(SETTINGS_KEY);
-      return data ? JSON.parse(data) : {
-        defaultSource: 'vidy',
-        autoplayNext: true,
-        cinemaMode: true,
-        accentColor: 'teal',
-        hideUnavailable: true,
-      };
+      const stored = data ? JSON.parse(data) : {};
+      return { ...DEFAULT_SETTINGS, ...stored };
     } catch {
-      return {
-        defaultSource: 'vidy',
-        autoplayNext: true,
-        cinemaMode: true,
-        accentColor: 'teal',
-        hideUnavailable: true,
-      };
+      return { ...DEFAULT_SETTINGS };
     }
   },
 

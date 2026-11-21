@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.kapt)
 }
 
+import java.io.FileInputStream
+import java.util.Properties
+
 android {
     namespace = "com.eru.cinema"
     compileSdk = 34
@@ -19,6 +22,15 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // BuildConfig fields - TMDB_API_KEY loaded from local.properties
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(FileInputStream(localPropertiesFile))
+        }
+        val tmdbApiKey = System.getenv("TMDB_API_KEY") ?: localProperties.getProperty("TMDB_API_KEY") ?: ""
+        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
     }
 
     buildTypes {

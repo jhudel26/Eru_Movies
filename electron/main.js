@@ -2,8 +2,55 @@ const { app, BrowserWindow, ipcMain, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { z } = require('zod');
+const { logger, ipcLogger, tmdbLogger } = require('./logger');
 
 // Simple .env loader for main process
+
+// Zod validation schemas for IPC handlers
+const schemas = {
+  search: z.object({
+    query: z.string().min(1).max(500).trim(),
+  }),
+
+  getDetail: z.object({
+    type: z.enum(['movie', 'tv']),
+    slug: z.string().min(1).max(100),
+    source: z.string().min(1).max(50),
+    cardTitle: z.string().max(200).nullable().optional(),
+  }),
+
+  getEpisodes: z.object({
+    slug: z.string().min(1).max(100),
+    seasonNum: z.number().int().positive().max(100),
+    source: z.string().min(1).max(50),
+  }),
+
+  getEpisodeEmbed: z.object({
+    slug: z.string().min(1).max(100),
+    seasonNum: z.number().int().positive().max(100),
+    episodeNum: z.number().int().positive().max(1000),
+    tmdbId: z.string().min(1).max(20),
+    imdbId: z.string().min(1).max(20).nullable().optional(),
+    source: z.string().min(1).max(50),
+  }),
+
+  openExternal: z.object({
+    url: z.string().url(),
+  }),
+};
+
+// Validation helper
+function validateIpc(schema) {
+  return (data, _event) => {
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      console.warn('[IPC Validation Failed]', result.error.flatten());
+      throw new Error(`Invalid input: ${result.error.errors.map(e => e.message).join(', ')}`);
+    }
+    return result.data;
+  };
+}
 try {
   const envPath = path.join(__dirname, '../.env');
   if (fs.existsSync(envPath)) {
@@ -162,8 +209,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,            // Allows cross-domain streaming embeds
-      allowRunningInsecureContent: true,
+      webSecurity: true,             // Enabled for security; CSP handles embeds
+      allowRunningInsecureContent: false,
       webviewTag: true               // Enable <webview> for standalone player (own process, ad-blocked)
     }
   });
@@ -235,15 +282,51 @@ function createWindow() {
     webviewContents.on('will-redirect', checkNavigation);
   });
 
-  // Setup ad blocking and header fixing for streaming players
+  // Setup ad blocking, CSP, and header fixing for streaming players
   const ses = session.defaultSession;
+
+  // Allowed embed origins for streaming (CSP frame-src / child-src)
+  const EMBED_ORIGINS = [
+    'https://www.vidy.st',
+    'https://vidsrc.cc',
+    'https://vidsrc.xyz',
+    'https://vidsrc.to',
+    'https://multiembed.mov',
+    'https://player.cinezo.live',
+    'https://www.2embed.cc',
+    'https://player.autoembed.cc',
+    'https://closeload.com',
+    'https://wecollege.net',
+    'https://goldenkite.top',
+    'https://greenkite.top',
+    'https://peakpine.top',
+    'https://urbanmesa.top',
+    'https://calmsable.top',
+    'https://*.workers.dev',
+  ];
+
+  const CSP_FRAME_SRC = EMBED_ORIGINS.join(' ');
+  const CSP_SCRIPT_SRC = [
+    "'self'",
+    "'unsafe-inline'",  // Required for React dev / inline scripts
+    'https://www.vidy.st',
+    'https://vidsrc.cc',
+    'https://vidsrc.xyz',
+    'https://vidsrc.to',
+    'https://multiembed.mov',
+    'https://player.cinezo.live',
+    'https://www.2embed.cc',
+    'https://player.autoembed.cc',
+    'https://closeload.com',
+    'https://*.workers.dev',
+  ].join(' ');
 
   // 1. Block ad scripts
   ses.webRequest.onBeforeRequest({ urls: AD_PATTERNS }, (details, callback) => {
     callback({ cancel: true });
   });
 
-  // 2. Remove restrictive X-Frame-Options & CSP frame-ancestors for embeds (case-insensitive)
+  // 2. Apply CSP + Remove restrictive X-Frame-Options & CSP frame-ancestors for embeds
   ses.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...details.responseHeaders };
     for (const key of Object.keys(responseHeaders)) {
@@ -252,9 +335,26 @@ function createWindow() {
         delete responseHeaders[key];
       } else if (lower === 'content-security-policy') {
         responseHeaders[key] = responseHeaders[key].map(policy => {
+          // Remove frame-ancestors restrictions from embed responses
           return policy.replace(/frame-ancestors[^;]+;?/gi, '');
         });
       }
+    }
+
+    // Add our CSP for the main app (only for main document, not subresources)
+    if (details.resourceType === 'mainFrame') {
+      responseHeaders['Content-Security-Policy'] = [
+        `default-src 'self'`,
+        `frame-src ${CSP_FRAME_SRC}`,
+        `child-src ${CSP_FRAME_SRC}`,
+        `script-src ${CSP_SCRIPT_SRC}`,
+        `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
+        `font-src 'self' https://fonts.gstatic.com`,
+        `img-src 'self' data: https:`,
+        `connect-src 'self' https://api.themoviedb.org https://image.tmdb.org https://www.vidy.st`,
+        `media-src 'self' https:`,
+        `worker-src 'self' blob:`,
+      ].join('; ');
     }
 
     callback({ cancel: false, responseHeaders });
@@ -299,12 +399,27 @@ app.on('window-all-closed', () => {
 // IPC HANDLERS
 // -------------------------------------------------------------
 
-// Window Controls
-ipcMain.handle('window:minimize', () => {
-  mainWindow?.minimize();
-});
+function withLogging(handlerName, handler) {
+  return async (event, data) => {
+    const start = Date.now();
+    ipcLogger.debug(`IPC ${handlerName} called`, { data });
+    try {
+      const result = await handler(event, data);
+      ipcLogger.info(`IPC ${handlerName} completed`, { durationMs: Date.now() - start });
+      return result;
+    } catch (err) {
+      ipcLogger.error(`IPC ${handlerName} failed`, { error: err.message, durationMs: Date.now() - start });
+      throw err;
+    }
+  };
+}
 
-ipcMain.handle('window:maximize', () => {
+// Window Controls
+ipcMain.handle('window:minimize', withLogging('window:minimize', () => {
+  mainWindow?.minimize();
+}));
+
+ipcMain.handle('window:maximize', withLogging('window:maximize', () => {
   if (!mainWindow) return false;
   if (mainWindow.isMaximized()) {
     mainWindow.unmaximize();
@@ -313,96 +428,99 @@ ipcMain.handle('window:maximize', () => {
     mainWindow.maximize();
     return true;
   }
-});
+}));
 
-ipcMain.handle('window:close', () => {
+ipcMain.handle('window:close', withLogging('window:close', () => {
   mainWindow?.close();
-});
+}));
 
-ipcMain.handle('window:isMaximized', () => {
+ipcMain.handle('window:isMaximized', withLogging('window:isMaximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
-});
+}));
 
-ipcMain.handle('shell:openExternal', async (_event, url) => {
-  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-    await shell.openExternal(url);
-  }
-});
+ipcMain.handle('shell:openExternal', withLogging('shell:openExternal', async (_event, url) => {
+  const { url: validatedUrl } = validateIpc(schemas.openExternal)({ url }, _event);
+  await shell.openExternal(validatedUrl);
+}));
 
 // Sources Data Scraper Handlers (Unified TMDB & Vidy Engine)
-ipcMain.handle('sources:getHome', async () => {
+ipcMain.handle('sources:getHome', withLogging('sources:getHome', async () => {
   try {
     const data = await UnifiedCatalog.getHome();
-    console.log(`[IPC] sources:getHome -> ${data.heroes?.length || 0} heroes, ${data.items?.length || 0} items`);
+    ipcLogger.info('sources:getHome completed', { heroes: data.heroes?.length || 0, items: data.items?.length || 0 });
     return data;
   } catch (err) {
-    console.error('[IPC] sources:getHome error:', err);
+    ipcLogger.error('sources:getHome error', { error: err.message });
     return { heroes: [], items: [] };
   }
-});
+}));
 
-ipcMain.handle('sources:getMovies', async () => {
+ipcMain.handle('sources:getMovies', withLogging('sources:getMovies', async () => {
   try {
     const movies = await UnifiedCatalog.getMovies();
-    console.log(`[IPC] sources:getMovies -> ${movies?.length || 0} movies`);
+    ipcLogger.info('sources:getMovies completed', { count: movies?.length || 0 });
     return movies;
   } catch (err) {
-    console.error('[IPC] sources:getMovies error:', err);
+    ipcLogger.error('sources:getMovies error', { error: err.message });
     return [];
   }
-});
+}));
 
-ipcMain.handle('sources:getTvShows', async () => {
+ipcMain.handle('sources:getTvShows', withLogging('sources:getTvShows', async () => {
   try {
     const tvShows = await UnifiedCatalog.getTvShows();
-    console.log(`[IPC] sources:getTvShows -> ${tvShows?.length || 0} tv shows`);
+    ipcLogger.info('sources:getTvShows completed', { count: tvShows?.length || 0 });
     return tvShows;
   } catch (err) {
-    console.error('[IPC] sources:getTvShows error:', err);
+    ipcLogger.error('sources:getTvShows error', { error: err.message });
     return [];
   }
-});
+}));
 
-ipcMain.handle('sources:search', async (_event, { query } = {}) => {
+ipcMain.handle('sources:search', withLogging('sources:search', async (_event, data) => {
+  const { query } = validateIpc(schemas.search)(data, _event);
   try {
-    const results = await UnifiedCatalog.search(query || '');
-    console.log(`[IPC] sources:search "${query}" -> ${results?.length || 0} results`);
+    const results = await UnifiedCatalog.search(query);
+    ipcLogger.info('sources:search completed', { query, count: results?.length || 0 });
     return results;
   } catch (err) {
-    console.error('[IPC] sources:search error:', err);
+    ipcLogger.error('sources:search error', { query, error: err.message });
     return [];
   }
-});
+}));
 
-ipcMain.handle('sources:getDetail', async (_event, { type, slug, source, cardTitle } = {}) => {
+ipcMain.handle('sources:getDetail', withLogging('sources:getDetail', async (_event, data) => {
+  const { type, slug, source, cardTitle } = validateIpc(schemas.getDetail)(data, _event);
   try {
     const detail = await UnifiedCatalog.getDetail(type, slug, source, cardTitle);
-    console.log(`[IPC] sources:getDetail "${slug}" -> ${detail?.title || 'null'}`);
+    ipcLogger.info('sources:getDetail completed', { slug, title: detail?.title || 'null' });
     return detail;
   } catch (err) {
-    console.error('[IPC] sources:getDetail error:', err);
+    ipcLogger.error('sources:getDetail error', { slug, error: err.message });
     return null;
   }
-});
+}));
 
-ipcMain.handle('sources:getEpisodes', async (_event, { slug, seasonNum, source } = {}) => {
+ipcMain.handle('sources:getEpisodes', withLogging('sources:getEpisodes', async (_event, data) => {
+  const { slug, seasonNum, source } = validateIpc(schemas.getEpisodes)(data, _event);
   try {
     const eps = await UnifiedCatalog.getEpisodes(slug, seasonNum, source);
-    console.log(`[IPC] sources:getEpisodes "${slug}" S${seasonNum} -> ${eps?.length || 0} episodes`);
+    ipcLogger.info('sources:getEpisodes completed', { slug, seasonNum, count: eps?.length || 0 });
     return eps;
   } catch (err) {
-    console.error('[IPC] sources:getEpisodes error:', err);
+    ipcLogger.error('sources:getEpisodes error', { slug, seasonNum, error: err.message });
     return [];
   }
-});
+}));
 
-ipcMain.handle('sources:getEpisodeEmbed', async (_event, { slug, seasonNum, episodeNum, tmdbId, imdbId, source } = {}) => {
+ipcMain.handle('sources:getEpisodeEmbed', withLogging('sources:getEpisodeEmbed', async (_event, data) => {
+  const { slug, seasonNum, episodeNum, tmdbId, imdbId, source } = validateIpc(schemas.getEpisodeEmbed)(data, _event);
   try {
     const embed = await UnifiedCatalog.getEpisodeEmbed(slug, seasonNum, episodeNum, tmdbId, imdbId, source);
-    console.log(`[IPC] sources:getEpisodeEmbed S${seasonNum}E${episodeNum} -> ${embed?.servers?.length || 0} servers`);
+    ipcLogger.info('sources:getEpisodeEmbed completed', { slug, seasonNum, episodeNum, serverCount: embed?.servers?.length || 0 });
     return embed;
   } catch (err) {
-    console.error('[IPC] sources:getEpisodeEmbed error:', err);
+    ipcLogger.error('sources:getEpisodeEmbed error', { slug, seasonNum, episodeNum, error: err.message });
     return { embedUrl: null, servers: [] };
   }
-});
+}));

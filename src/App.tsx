@@ -6,6 +6,7 @@ import MediaGrid from './components/MediaGrid';
 import MediaDetailModal from './components/MediaDetailModal';
 import PlayerView from './components/PlayerView';
 import SettingsModal from './components/SettingsModal';
+import { MediaGridErrorBoundary, PlayerErrorBoundary } from './components/ErrorBoundary';
 import { ApiService } from './services/api';
 import { StorageService } from './services/storage';
 import { Search, Clock, ChevronRight } from 'lucide-react';
@@ -171,10 +172,12 @@ export default function App() {
 
         <main className="flex-1 h-full overflow-hidden flex flex-col relative bg-eru-bg">
           {playingMedia ? (
-            <PlayerView
-              item={playingMedia}
-              onBack={handlePlayerClose}
-            />
+            <PlayerErrorBoundary onError={handlePlayerClose}>
+              <PlayerView
+                item={playingMedia}
+                onBack={handlePlayerClose}
+              />
+            </PlayerErrorBoundary>
           ) : (
             <div className="flex-1 overflow-y-auto px-6 sm:px-8 py-6 space-y-8 custom-scrollbar">
 
@@ -258,24 +261,26 @@ export default function App() {
                   )}
 
                   {/* Main media grid */}
-                  <MediaGrid
-                    title={sectionTitle()}
-                    items={getDisplayItems()}
-                    loading={loading}
-                    onPlay={handlePlay}
-                    onOpenDetail={setActiveMediaDetail}
-                    onToggleWatchlist={toggleWatchlist}
-                    isWatchlisted={isWatchlisted}
-                    showFilters={['discover', 'movies', 'tv'].includes(currentTab)}
-                    tabType={currentTab}
-                    onRemoveHistory={handleRemoveFromHistory}
-                    onClearHistory={handleClearHistory}
-                    onNavigateDiscover={() => {
-                      setCurrentTab('discover');
-                      setSearchResults(null);
-                      setSearchQuery('');
-                    }}
-                  />
+                  <MediaGridErrorBoundary>
+                    <MediaGrid
+                      title={sectionTitle()}
+                      items={getDisplayItems()}
+                      loading={loading}
+                      onPlay={handlePlay}
+                      onOpenDetail={setActiveMediaDetail}
+                      onToggleWatchlist={toggleWatchlist}
+                      isWatchlisted={isWatchlisted}
+                      showFilters={['discover', 'movies', 'tv'].includes(currentTab)}
+                      tabType={currentTab}
+                      onRemoveHistory={handleRemoveFromHistory}
+                      onClearHistory={handleClearHistory}
+                      onNavigateDiscover={() => {
+                        setCurrentTab('discover');
+                        setSearchResults(null);
+                        setSearchQuery('');
+                      }}
+                    />
+                  </MediaGridErrorBoundary>
                 </>
               )}
             </div>

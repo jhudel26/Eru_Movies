@@ -6,9 +6,7 @@ import {
 } from 'lucide-react';
 import { ApiService } from '../services/api';
 import { StorageService } from '../services/storage';
-
-const VIDY_BASE = 'https://www.vidy.st';
-const VIDY_ACCENT = '2DD4BF'; // ERU teal, no # prefix — Vidy ?color= param
+import { getVidyPlayerUrl } from '../shared/vidy-engine';
 
 export default function PlayerView({ item, onBack }) {
   const isElectron = ApiService.isElectron;
@@ -33,15 +31,12 @@ export default function PlayerView({ item, onBack }) {
   const playerContainerRef = useRef(null);
   const webviewRef = useRef(null);
 
-  // Directly construct Vidy streaming endpoint with ERU teal accent
+  // Use shared Vidy engine for consistent URL construction
   const streamUrl = useMemo(() => {
     if (!tmdbId) return null;
-    const accent = `color=${VIDY_ACCENT}`;
+    const baseUrl = getVidyPlayerUrl(item.type, tmdbId, currentSeason, currentEpisode);
     const reloadParam = reloadKey > 0 ? `&_r=${reloadKey}` : '';
-    if (item.type === 'tv') {
-      return `${VIDY_BASE}/tv/${tmdbId}/${currentSeason}/${currentEpisode}?${accent}${reloadParam}`;
-    }
-    return `${VIDY_BASE}/movie/${tmdbId}?${accent}${reloadParam}`;
+    return baseUrl ? `${baseUrl}${reloadParam}` : null;
   }, [item.type, tmdbId, currentSeason, currentEpisode, reloadKey]);
 
   // Save to history on mount or episode change
@@ -222,15 +217,24 @@ export default function PlayerView({ item, onBack }) {
     };
 
     const onLoad = () => {
+      console.log('[PlayerView] Webview did-finish-load');
       setLoading(false);
       applyTheme();
       setTimeout(applyTheme, 1000);
       setTimeout(applyTheme, 2500);
     };
-    const onStart = () => setLoading(true);
+    const onStart = () => {
+      console.log('[PlayerView] Webview did-start-loading');
+      setLoading(true);
+    };
+    const onFail = (e) => {
+      console.error('[PlayerView] Webview did-fail-load', e);
+      setLoading(false);
+    };
 
     wv.addEventListener('did-finish-load', onLoad);
     wv.addEventListener('did-start-loading', onStart);
+    wv.addEventListener('did-fail-load', onFail);
     wv.addEventListener('dom-ready', applyTheme);
 
     const timer = setTimeout(() => {
@@ -242,6 +246,7 @@ export default function PlayerView({ item, onBack }) {
       clearTimeout(timer);
       wv.removeEventListener('did-finish-load', onLoad);
       wv.removeEventListener('did-start-loading', onStart);
+      wv.removeEventListener('did-fail-load', onFail);
       wv.removeEventListener('dom-ready', applyTheme);
     };
   }, [streamUrl]);
@@ -394,14 +399,27 @@ export default function PlayerView({ item, onBack }) {
 
         {streamUrl ? (
           isElectron ? (
-            <webview
-              ref={webviewRef}
-              key={streamUrl}
-              src={streamUrl}
-              className="w-full h-full absolute inset-0 border-0"
-              webpreferences="autoplay=true, images=true, javascript=true"
-              style={{ display: 'flex', flex: 1, width: '100%', height: '100%' }}
-            />
+            <>
+              <webview
+                ref={webviewRef}
+                key={streamUrl}
+                src={streamUrl}
+                className="w-full h-full absolute inset-0 border-0"
+                webpreferences="autoplay=true, images=true, javascript=true, webSecurity=false, allowRunningInsecureContent=true, partition=persist:eru-player"
+                style={{ display: 'flex', flex: 1, width: '100%', height: '100%' }}
+              />
+              {/* Fallback iframe if webview fails to load */}
+              {loading && (
+                <iframe
+                  key={`fallback-${streamUrl}`}
+                  src={streamUrl}
+                  className="w-full h-full absolute inset-0 border-0"
+                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  style={{ display: 'flex', flex: 1, width: '100%', height: '100%', pointerEvents: 'none' }}
+                />
+              )}
+            </>
           ) : (
             <iframe
               key={streamUrl}

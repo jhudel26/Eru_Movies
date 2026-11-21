@@ -1,5 +1,6 @@
 package com.eru.cinema.data.api
 
+import com.eru.cinema.BuildConfig
 import com.eru.cinema.data.model.Episode
 import com.eru.cinema.data.model.HomeCatalog
 import com.eru.cinema.data.model.MediaDetail
@@ -18,10 +19,14 @@ import java.util.concurrent.TimeUnit
 
 object TmdbService {
     private const val BASE_URL = "https://api.themoviedb.org/3"
-    private const val API_KEY = "c1dd4a7d9aab18675dc3720ab5a99436"
     private const val POSTER_BASE = "https://image.tmdb.org/t/p/w500"
     private const val BACKDROP_BASE = "https://image.tmdb.org/t/p/w1280"
     private const val STILL_BASE = "https://image.tmdb.org/t/p/w300"
+    private val API_KEY = BuildConfig.TMDB_API_KEY
+
+    init {
+        android.util.Log.d("TmdbService", "API_KEY loaded: ${if (API_KEY.isBlank()) "EMPTY" else "SET (${API_KEY.length} chars)"}")
+    }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -38,13 +43,19 @@ object TmdbService {
     }
 
     private fun fetchJson(url: String): JsonObject? {
+        android.util.Log.d("TmdbService", "Fetching: ${url.substring(0, minOf(url.length, 200))}")
         return try {
             val req = Request.Builder().url(url).build()
             val resp = client.newCall(req).execute()
+            android.util.Log.d("TmdbService", "Response: ${resp.code}")
             val body = resp.body?.string() ?: return null
+            if (!resp.isSuccessful) {
+                android.util.Log.e("TmdbService", "API Error: $body")
+                return null
+            }
             gson.fromJson(body, JsonObject::class.java)
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("TmdbService", "Fetch error: ${e.message}", e)
             null
         }
     }

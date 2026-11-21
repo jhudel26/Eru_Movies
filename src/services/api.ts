@@ -1,13 +1,17 @@
 // Service layer interfacing with Electron Preload API with direct fallback
+// TMDB_KEY is loaded from process.env (set by Vite from .env)
 
-const TMDB_KEY = 'c1dd4a7d9aab18675dc3720ab5a99436';
+import { getVidyPlayerUrl, buildServers } from '../shared/vidy-engine';
+import type { MediaItem, Server, Episode, EpisodeEmbed, HomeData } from '../shared/electron-api';
+
+const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const POSTER_MD = 'https://image.tmdb.org/t/p/w500';
 const BACKDROP_LG = 'https://image.tmdb.org/t/p/original';
 const VIDY_BASE = 'https://www.vidy.st';
-const VIDY_ACCENT = '?color=2DD4BF'; // ERU teal accent for Vidy player controls
+const VIDY_ACCENT = '?color=2DD4BF'; // ERU teal accent for Vidy player controls (kept for backward compat)
 
-const GENRE_MAP = {
+const GENRE_MAP: Record<number, string> = {
   28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
   99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
   27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
@@ -16,11 +20,11 @@ const GENRE_MAP = {
   10765: 'Sci-Fi & Fantasy', 10766: 'Soap', 10767: 'Talk', 10768: 'War & Politics'
 };
 
-function getTodayString() {
+export function getTodayString(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-function isAvailableDirect(item) {
+export function isAvailableDirect(item: MediaItem): boolean {
   if (!item) return false;
   const today = getTodayString();
   if (item.type === 'movie') {
@@ -36,7 +40,30 @@ function isAvailableDirect(item) {
   return false;
 }
 
-function normalizeDirect(item, type) {
+interface TMDBItem {
+  id: number;
+  media_type?: string;
+  title?: string;
+  original_title?: string;
+  name?: string;
+  original_name?: string;
+  release_date?: string;
+  first_air_date?: string;
+  genre_ids?: number[];
+  vote_average?: number;
+  vote_count?: number;
+  popularity?: number;
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+  imdb_id?: string | null;
+  external_ids?: { imdb_id?: string | null };
+  overview?: string;
+  runtime?: number;
+  number_of_seasons?: number;
+  number_of_episodes?: number;
+}
+
+export function normalizeDirect(item: TMDBItem, type: 'movie' | 'tv'): MediaItem | null {
   if (!item || item.media_type === 'person') return null;
   const isMovie = type === 'movie' || item.title !== undefined;
   const t = isMovie ? 'movie' : 'tv';
@@ -63,7 +90,7 @@ function normalizeDirect(item, type) {
   };
 }
 
-async function directTmdbFetch(path, params = {}) {
+async function directTmdbFetch(path: string, params: Record<string, string> = {}): Promise<any> {
   try {
     const url = new URL(`${TMDB_BASE}${path}`);
     url.searchParams.set('api_key', TMDB_KEY);
@@ -83,11 +110,11 @@ async function directTmdbFetch(path, params = {}) {
 }
 
 export const ApiService = {
-  get isElectron() {
+  get isElectron(): boolean {
     return typeof window !== 'undefined' && Boolean(window.eruAPI);
   },
 
-  async getHome() {
+  async getHome(): Promise<HomeData> {
     if (this.isElectron) {
       try {
         const res = await window.eruAPI.getHome();
@@ -124,7 +151,7 @@ export const ApiService = {
     };
   },
 
-  async getMovies() {
+  async getMovies(): Promise<MediaItem[]> {
     if (this.isElectron) {
       try {
         const res = await window.eruAPI.getMovies();
@@ -144,7 +171,7 @@ export const ApiService = {
     return (data?.results || []).map(m => normalizeDirect(m, 'movie')).filter(Boolean).filter(isAvailableDirect);
   },
 
-  async getTvShows() {
+  async getTvShows(): Promise<MediaItem[]> {
     if (this.isElectron) {
       try {
         const res = await window.eruAPI.getTvShows();
@@ -163,7 +190,7 @@ export const ApiService = {
     return (data?.results || []).map(t => normalizeDirect(t, 'tv')).filter(Boolean).filter(isAvailableDirect);
   },
 
-  async search(query) {
+  async search(query: string): Promise<MediaItem[]> {
     if (!query || !query.trim()) return [];
     if (this.isElectron) {
       try {
@@ -181,7 +208,7 @@ export const ApiService = {
       .filter(isAvailableDirect);
   },
 
-  async getDetail(type, slug, source, cardTitle = null) {
+  async getDetail(type: string, slug: string, source: string, cardTitle: string | null = null): Promise<MediaItem | null> {
     if (this.isElectron) {
       try {
         const res = await window.eruAPI.getDetail(type, slug, source, cardTitle);
@@ -205,30 +232,8 @@ export const ApiService = {
     norm.imdbId = imdbId;
     norm.runtime = data.runtime ? `${data.runtime} min` : null;
 
-    // Vidy and failover servers
-    norm.servers = [
-      {
-        name: 'Vidy.st Direct',
-        url: isTv ? `${VIDY_BASE}/tv/${cleanId}/1/1${VIDY_ACCENT}` : `${VIDY_BASE}/movie/${cleanId}${VIDY_ACCENT}`,
-        isDirect: true
-      },
-      {
-        name: 'VidSrc Pro',
-        url: isTv ? `https://vidsrc.cc/v2/embed/tv/${cleanId}/1/1` : `https://vidsrc.cc/v2/embed/movie/${cleanId}`
-      },
-      {
-        name: 'SuperEmbed 4K',
-        url: isTv ? `https://multiembed.mov/?video_id=${cleanId}&s=1&e=1&tmdb=1` : `https://multiembed.mov/?video_id=${cleanId}&tmdb=1`
-      },
-      {
-        name: 'Cinezo HD',
-        url: isTv ? `https://player.cinezo.live/embed/tv/${cleanId}/1/1` : `https://player.cinezo.live/embed/movie/${cleanId}`
-      },
-      {
-        name: '2Embed',
-        url: isTv ? `https://www.2embed.cc/embedtv/${cleanId}?s=1&e=1` : `https://www.2embed.cc/embed/${cleanId}`
-      }
-    ];
+    // Vidy and failover servers — use shared engine
+    norm.servers = buildServers(isTv ? 'tv' : 'movie', cleanId, imdbId, 1, 1);
 
     if (isTv) {
       const numSeasons = data.number_of_seasons || 1;
@@ -238,7 +243,7 @@ export const ApiService = {
     return norm;
   },
 
-  async getEpisodes(slug, seasonNum, source) {
+  async getEpisodes(slug: string, seasonNum: number, source: string): Promise<Episode[]> {
     if (this.isElectron) {
       try {
         const res = await window.eruAPI.getEpisodes(slug, seasonNum, source);
@@ -260,7 +265,7 @@ export const ApiService = {
     }));
   },
 
-  async getEpisodeEmbed(slug, seasonNum = 1, episodeNum = 1, tmdbId, imdbId, source) {
+  async getEpisodeEmbed(slug: string, seasonNum = 1, episodeNum = 1, tmdbId: string, imdbId: string, source: string): Promise<EpisodeEmbed> {
     if (this.isElectron) {
       try {
         const res = await window.eruAPI.getEpisodeEmbed(slug, seasonNum, episodeNum, tmdbId, imdbId, source);
@@ -271,29 +276,7 @@ export const ApiService = {
     }
 
     const cleanId = String(tmdbId || slug).replace(/^tmdb-(?:movie|tv)-/, '');
-    const servers = [
-      {
-        name: 'Vidy.st Direct',
-        url: `${VIDY_BASE}/tv/${cleanId}/${seasonNum}/${episodeNum}${VIDY_ACCENT}`,
-        isDirect: true
-      },
-      {
-        name: 'VidSrc Pro',
-        url: `https://vidsrc.cc/v2/embed/tv/${cleanId}/${seasonNum}/${episodeNum}`
-      },
-      {
-        name: 'SuperEmbed 4K',
-        url: `https://multiembed.mov/?video_id=${cleanId}&s=${seasonNum}&e=${episodeNum}&tmdb=1`
-      },
-      {
-        name: 'Cinezo HD',
-        url: `https://player.cinezo.live/embed/tv/${cleanId}/${seasonNum}/${episodeNum}`
-      },
-      {
-        name: '2Embed',
-        url: `https://www.2embed.cc/embedtv/${cleanId}?s=${seasonNum}&e=${episodeNum}`
-      }
-    ];
+    const servers = buildServers('tv', cleanId, imdbId, seasonNum, episodeNum);
 
     return {
       embedUrl: servers[0]?.url || null,
@@ -302,24 +285,24 @@ export const ApiService = {
   },
 
   // Window Controls
-  minimize() {
+  minimize(): void {
     if (this.isElectron) window.eruAPI.minimize();
   },
 
-  maximize() {
+  maximize(): void {
     if (this.isElectron) window.eruAPI.maximize();
   },
 
-  close() {
+  close(): void {
     if (this.isElectron) window.eruAPI.close();
   },
 
-  async isMaximized() {
+  async isMaximized(): Promise<boolean> {
     if (this.isElectron) return await window.eruAPI.isMaximized();
     return false;
   },
 
-  onMaximizeChange(cb) {
+  onMaximizeChange(cb: (isMax: boolean) => void): () => void {
     if (this.isElectron) return window.eruAPI.onMaximizeChange(cb);
     return () => {};
   }

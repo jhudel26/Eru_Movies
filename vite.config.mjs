@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,20 +6,30 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export default defineConfig({
-  plugins: [react()],
-  base: './',
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
+    plugins: [react()],
+    base: './',
+    define: {
+      'import.meta.env.VITE_TMDB_API_KEY': JSON.stringify(env.TMDB_API_KEY),
     },
-  },
-  server: {
-    port: 5173,
-    strictPort: true,
-  },
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-  },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
+    },
+    server: {
+      port: 5173,
+      strictPort: true,
+    },
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true,
+    },
+    esbuild: {
+      // Remove console.log in production
+      pure: mode === 'production' ? ['console.log'] : [],
+    },
+  };
 });

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Base config: only HTTPS allowed by default -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Domain-specific exceptions for streaming embeds that may use HTTP -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">vidy.st</domain>
+        <domain includeSubdomains="true">vidsrc.cc</domain>
+        <domain includeSubdomains="true">vidsrc.xyz</domain>
+        <domain includeSubdomains="true">vidsrc.to</domain>
+        <domain includeSubdomains="true">multiembed.mov</domain>
+        <domain includeSubdomains="true">cinezo.live</domain>
+        <domain includeSubdomains="true">2embed.cc</domain>
+        <domain includeSubdomains="true">autoembed.cc</domain>
+        <domain includeSubdomains="true">closeload.com</domain>
+        <domain includeSubdomains="true">wecollege.net</domain>
+        <domain includeSubdomains="true">goldenkite.top</domain>
+        <domain includeSubdomains="true">greenkite.top</domain>
+        <domain includeSubdomains="true">peakpine.top</domain>
+        <domain includeSubdomains="true">urbanmesa.top</domain>
+        <domain includeSubdomains="true">calmsable.top</domain>
+    </domain-config>
+
+    <!-- Debug config: allow HTTP for localhost during development -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
